@@ -271,6 +271,8 @@ int QuicheWrapper::PollHttpResponse(quiche_conn* conn, quiche_h3_conn* http3stre
 
 	while (1)
 	{
+		// quiche 側に HTTP のイベントが来ているかチェック
+		// ヘッダ受信、ボディ受信、ストリームのクローズの 3 種のイベントがある
 		int64_t s = quiche_h3_conn_poll(http3stream, conn, &ev);
 		if (s < 0)
 		{
@@ -283,6 +285,8 @@ int QuicheWrapper::PollHttpResponse(quiche_conn* conn, quiche_h3_conn* http3stre
 		{
 			case QUICHE_H3_EVENT_HEADERS:
 			{
+				// HTTP ヘッダの受信完了
+				// quiche_h3_event_for_each_header にコールバック関数を渡してヘッダを受け取る
 				if (quiche_h3_event_for_each_header(ev, for_each_header, nullptr) != 0)
 				{
 					perror("failed to process headers");
@@ -293,16 +297,19 @@ int QuicheWrapper::PollHttpResponse(quiche_conn* conn, quiche_h3_conn* http3stre
 
 			case QUICHE_H3_EVENT_DATA:
 			{
+				// HTTP ボディの受信完了
+				// ヘッダとは違いこちらはバッファを受け渡す形式
 				ssize_t len = quiche_h3_recv_body(http3stream, conn, s, reinterpret_cast<uint8_t*>(buf), sizeof(buf));
 				if (len > 0)
 				{
-					printf("got HTTP body: %.*s", (int)len, buf);
+					printf("got HTTP body:\n %.*s", (int)len, buf);
 				}
 				break;
 			}
 
 			case QUICHE_H3_EVENT_FINISHED:
 			{
+				// ストリームがクローズされた
 				if (quiche_conn_close(conn, true, 0, nullptr, 0) < 0)
 				{
 					perror("failed to close connection\n");
