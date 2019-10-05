@@ -124,21 +124,26 @@ void QuicheWrapper::Send(quiche_conn* _conn, SOCKET sock)
 {
 	static uint8_t out[MAX_DATAGRAM_SIZE] = { 0 };
 
-	while (1) {
+	while (1)
+	{
+		// quiche によって送信データ生成する
+		// quiche_conn_send を呼びだけで、内部のステータス(コネクションやストリームの状況)に応じて適切なデータを生成してくれる
 		ssize_t written = quiche_conn_send(_conn, out, sizeof(out));
-
-		if (written == QUICHE_ERR_DONE) {
+		if (written == QUICHE_ERR_DONE)
+		{
 			fprintf(stderr, "done writing\n");
 			break;
 		}
-
-		if (written < 0) {
+		if (written < 0)
+		{
 			fprintf(stderr, "failed to create packet: %zd\n", written);
 			return;
 		}
 
+		// quiche が生成したデータを UDP ソケットで送信する
 		ssize_t sent = send(sock, (const char*)out, written, 0);
-		if (sent != written) {
+		if (sent != written)
+		{
 			perror("failed to send");
 			return;
 		}
