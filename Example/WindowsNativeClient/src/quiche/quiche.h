@@ -1,5 +1,4 @@
-// Copyright (C) 2018, Cloudflare, Inc.
-// Copyright (C) 2018, Alessandro Ghedini
+// Copyright (C) 2018-2019, Cloudflare, Inc.
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -28,11 +27,6 @@
 #ifndef QUICHE_H
 #define QUICHE_H
 
-#if defined(_MSC_VER)
-#include <BaseTsd.h>
-typedef SSIZE_T ssize_t;
-#endif
-
 #if defined(__cplusplus)
 extern "C" {
 #endif
@@ -44,7 +38,7 @@ extern "C" {
 //
 
 // The current QUIC wire version.
-#define QUICHE_PROTOCOL_VERSION 0xff000017
+#define QUICHE_PROTOCOL_VERSION 0xff00001b
 
 // The maximum length of a connection ID.
 #define QUICHE_MAX_CONN_ID_LEN 20
@@ -94,14 +88,17 @@ enum quiche_error {
 
     // The received data exceeds the stream's final size.
     QUICHE_ERR_FINAL_SIZE = -13,
+
+    // Error in congestion control.
+    QUICHE_ERR_CONGESTION_CONTROL = -14,
 };
 
 // Returns a human readable string with the quiche version number.
 const char *quiche_version(void);
 
 // Enables logging. |cb| will be called with log messages
-void quiche_enable_debug_logging(void (*cb)(const char *line, void *argp),
-                                 void *argp);
+int quiche_enable_debug_logging(void (*cb)(const char *line, void *argp),
+                                void *argp);
 
 // Stores configuration shared between multiple connections.
 typedef struct Config quiche_config;
@@ -126,13 +123,16 @@ void quiche_config_grease(quiche_config *config, bool v);
 // Enables logging of secrets.
 void quiche_config_log_keys(quiche_config *config);
 
+// Enables sending or receiving early data.
+void quiche_config_enable_early_data(quiche_config *config);
+
 // Configures the list of supported application protocols.
 int quiche_config_set_application_protos(quiche_config *config,
                                          const uint8_t *protos,
                                          size_t protos_len);
 
-// Sets the `idle_timeout` transport parameter.
-void quiche_config_set_idle_timeout(quiche_config *config, uint64_t v);
+// Sets the `max_idle_timeout` transport parameter.
+void quiche_config_set_max_idle_timeout(quiche_config *config, uint64_t v);
 
 // Sets the `max_packet_size` transport parameter.
 void quiche_config_set_max_packet_size(quiche_config *config, uint64_t v);
@@ -161,8 +161,16 @@ void quiche_config_set_ack_delay_exponent(quiche_config *config, uint64_t v);
 // Sets the `max_ack_delay` transport parameter.
 void quiche_config_set_max_ack_delay(quiche_config *config, uint64_t v);
 
-// Sets the `disable_migration` transport parameter.
-void quiche_config_set_disable_migration(quiche_config *config, bool v);
+// Sets the `disable_active_migration` transport parameter.
+void quiche_config_set_disable_active_migration(quiche_config *config, bool v);
+
+enum quiche_cc_algorithm {
+    QUICHE_CC_RENO = 0,
+    QUICHE_CC_CUBIC = 1,
+};
+
+// Sets the congestion control algorithm used.
+void quiche_config_set_cc_algorithm(quiche_config *config, enum quiche_cc_algorithm algo);
 
 // Frees the config object.
 void quiche_config_free(quiche_config *config);
@@ -199,10 +207,17 @@ ssize_t quiche_retry(const uint8_t *scid, size_t scid_len,
                      const uint8_t *token, size_t token_len,
                      uint8_t *out, size_t out_len);
 
+// Returns true if the given protocol version is supported.
+bool quiche_version_is_supported(uint32_t version);
+
 quiche_conn *quiche_conn_new_with_tls(const uint8_t *scid, size_t scid_len,
                                       const uint8_t *odcid, size_t odcid_len,
                                       quiche_config *config, void *ssl,
                                       bool is_server);
+
+// Enables qlog to the specified file descriptor. Unix only.
+void quiche_conn_set_qlog_fd(quiche_conn *conn, int fd, const char * log_title,
+                             const char * log_desc);
 
 // Processes QUIC packets received from the peer.
 ssize_t quiche_conn_recv(quiche_conn *conn, uint8_t *buf, size_t buf_len);
@@ -263,8 +278,25 @@ void quiche_conn_application_proto(quiche_conn *conn, const uint8_t **out,
 // Returns true if the connection handshake is complete.
 bool quiche_conn_is_established(quiche_conn *conn);
 
+// Returns true if the connection has a pending handshake that has progressed
+// enough to send or receive early data.
+bool quiche_conn_is_in_early_data(quiche_conn *conn);
+
 // Returns true if the connection is closed.
 bool quiche_conn_is_closed(quiche_conn *conn);
+
+// Initializes the stream's application data.
+//
+// Stream data can only be initialized once. Additional calls to this method
+// will fail.
+//
+// Note that the application is responsible for freeing the data.
+int quiche_conn_stream_init_application_data(quiche_conn *conn,
+                                             uint64_t stream_id,
+                                             void *data);
+
+// Returns the stream's application data, if any was initialized.
+void *quiche_conn_stream_application_data(quiche_conn *conn, uint64_t stream_id);
 
 // Fetches the next stream from the given iterator. Returns false if there are
 // no more elements in the iterator.
@@ -286,8 +318,11 @@ typedef struct {
     // The estimated round-trip time of the connection (in nanoseconds).
     uint64_t rtt;
 
-    // The size in bytes of the connection's congestion window.
+    // The size of the connection's congestion window in bytes.
     size_t cwnd;
+
+    // The estimated data delivery rate in bytes/s.
+    uint64_t delivery_rate;
 } quiche_stats;
 
 // Collects and returns statistics about the connection.
@@ -300,17 +335,69 @@ void quiche_conn_free(quiche_conn *conn);
 // HTTP/3 API
 //
 
-/// The current HTTP/3 ALPN token.
-#define QUICHE_H3_APPLICATION_PROTOCOL "\x05h3-23"
+// List of ALPN tokens of supported HTTP/3 versions.
+#define QUICHE_H3_APPLICATION_PROTOCOL "\x05h3-27\x05h3-25\x05h3-24\x05h3-23"
+
+enum quiche_h3_error {
+    /// There is no error or no work to do
+    QUICHE_H3_ERR_DONE = -1,
+
+    /// The provided buffer is too short.
+    QUICHE_H3_ERR_BUFFER_TOO_SHORT = -2,
+
+    /// Internal error in the HTTP/3 stack.
+    QUICHE_H3_ERR_INTERNAL_ERROR = -3,
+
+    /// Endpoint detected that the peer is exhibiting behavior that causes.
+    /// excessive load.
+    QUICHE_H3_ERR_EXCESSIVE_LOAD = -4,
+
+    /// Stream ID or Push ID greater that current maximum was
+    /// used incorrectly, such as exceeding a limit, reducing a limit,
+    /// or being reused.
+    QUICHE_H3_ERR_ID_ERROR= -5,
+
+    /// The endpoint detected that its peer created a stream that it will not
+    /// accept.
+    QUICHE_H3_ERR_STREAM_CREATION_ERROR = -6,
+
+    /// A required critical stream was closed.
+    QUICHE_H3_ERR_CLOSED_CRITICAL_STREAM = -7,
+
+    /// No SETTINGS frame at beginning of control stream.
+    QUICHE_H3_ERR_MISSING_SETTINGS = -8,
+
+    /// A frame was received which is not permitted in the current state.
+    QUICHE_H3_ERR_FRAME_UNEXPECTED = -9,
+
+    /// Frame violated layout or size rules.
+    QUICHE_H3_ERR_FRAME_ERROR = -10,
+
+    /// QPACK Header block decompression failure.
+    QUICHE_H3_ERR_QPACK_DECOMPRESSION_FAILED = -11,
+
+    /// Error originated from the transport layer.
+    QUICHE_H3_ERR_TRANSPORT_ERROR = -12,
+
+    /// The underlying QUIC stream (or connection) doesn't have enough capacity
+    /// for the operation to complete. The application should retry later on.
+    QUICHE_H3_ERR_STREAM_BLOCKED = -13,
+};
 
 // Stores configuration shared between multiple connections.
 typedef struct Http3Config quiche_h3_config;
 
-// Creates a HTTP/3 config object with the given version.
-quiche_h3_config *quiche_h3_config_new(uint64_t num_placeholders,
-                                       uint64_t max_header_list_size,
-                                       uint64_t qpack_max_table_capacity,
-                                       uint64_t qpack_blaocked_streams);
+// Creates an HTTP/3 config object with default settings values.
+quiche_h3_config *quiche_h3_config_new(void);
+
+// Sets the `SETTINGS_MAX_HEADER_LIST_SIZE` setting.
+void quiche_h3_config_set_max_header_list_size(quiche_h3_config *config, uint64_t v);
+
+// Sets the `SETTINGS_QPACK_MAX_TABLE_CAPACITY` setting.
+void quiche_h3_config_set_qpack_max_table_capacity(quiche_h3_config *config, uint64_t v);
+
+// Sets the `SETTINGS_QPACK_BLOCKED_STREAMS` setting.
+void quiche_h3_config_set_qpack_blocked_streams(quiche_h3_config *config, uint64_t v);
 
 // Frees the HTTP/3 config object.
 void quiche_h3_config_free(quiche_h3_config *config);
@@ -320,7 +407,7 @@ typedef struct Http3Connection quiche_h3_conn;
 
 // Creates a new server-side connection.
 quiche_h3_conn *quiche_h3_accept(quiche_conn *quiche_conn,
-                              quiche_h3_config *config);
+                                 quiche_h3_config *config);
 
 // Creates a new HTTP/3 connection using the provided QUIC connection.
 quiche_h3_conn *quiche_h3_conn_new_with_transport(quiche_conn *quiche_conn,
@@ -343,14 +430,18 @@ enum quiche_h3_event_type quiche_h3_event_type(quiche_h3_event *ev);
 
 // Iterates over the headers in the event.
 //
-// The `cb` callback will be called for each header in `ev`. If `cb` returns
-// any value other than `0`, processing will be interrupted and the value is
-// returned to the caller.
+// The `cb` callback will be called for each header in `ev`. `cb` should check
+// the validity of pseudo-headers and headers. If `cb` returns any value other
+// than `0`, processing will be interrupted and the value is returned to the
+// caller.
 int quiche_h3_event_for_each_header(quiche_h3_event *ev,
                                     int (*cb)(uint8_t *name, size_t name_len,
                                               uint8_t *value, size_t value_len,
                                               void *argp),
                                     void *argp);
+
+// Check whether data will follow the headers on the stream.
+bool quiche_h3_event_headers_has_body(quiche_h3_event *ev);
 
 // Frees the HTTP/3 event object.
 void quiche_h3_event_free(quiche_h3_event *ev);

@@ -196,17 +196,16 @@ ssize_t QuicheWrapper::Receive(SOCKET sock, quiche_conn* conn)
 quiche_h3_conn* QuicheWrapper::CreateHttpStream(quiche_conn* conn, const char* host)
 {
 	// HTTP/3 用のコンフィグを作成する
-	// quiche_h3_config_new 引数は以下(設定値は quiche サンプルのものをそのまま適用)
-	// uint64_t num_placeholders : プライオリティに関するプレースホルダーの設定(プライオリティ削除済みの為に不使用)
-	// uint64_t max_header_list_size : ヘッダリストに登録できるヘッダの最大数
-	// uint64_t qpack_max_table_capacity : QPACK の動的テーブルの最大値
-	// uint64_t qpack_blaocked_streams : ブロックされる可能性のあるストリーム数
-	quiche_h3_config* config = quiche_h3_config_new(0, 1024, 0, 0);
+	quiche_h3_config* config = quiche_h3_config_new();
 	if (config == nullptr)
 	{
 		fprintf(stderr, "failed to create HTTP/3 config\n");
 		return nullptr;
 	}
+	// HTTP/3 固有の設定
+	quiche_h3_config_set_max_header_list_size(config, 1024); 			// SETTINGS_MAX_HEADER_LIST_SIZE の設定。ヘッダリストに登録できるヘッダの最大数
+	quiche_h3_config_set_qpack_max_table_capacity(config, 0);			// SETTINGS_QPACK_MAX_TABLE_CAPACITY の設定。QPACK の動的テーブルの最大値
+	quiche_h3_config_set_qpack_blocked_streams(config, 0);	 			// SETTINGS_QPACK_BLOCKED_STREAMS の設定。ブロックされる可能性のあるストリーム数
 
 	// HTTP/3 通信用のストリームハンドルを作成(このタイミングではまだ通信しない)
 	auto http3stream = quiche_h3_conn_new_with_transport(conn, config);
@@ -384,9 +383,10 @@ quiche_config* QuicheWrapper::CreateQuicheConfig()
 	// quiche.h に定義されている QUICHE_H3_APPLICATION_PROTOCOL を渡せばいい
 	quiche_config_set_application_protos(config, (uint8_t*)QUICHE_H3_APPLICATION_PROTOCOL, sizeof(QUICHE_H3_APPLICATION_PROTOCOL) - 1);
 
+	// QUIC 固有の設定
 	// 生成した config に対して設定を適用していく(下記の設定値は quiche の example に準拠)
 	// 以下に無い quiche_config_set_max_ack_delay, quiche_config_set_ack_delay_exponent はクライアントからは呼ばないこと(サーバから降ってきた値を使用する)
-	quiche_config_set_idle_timeout(config, 100);
+	quiche_config_set_max_idle_timeout(config, 100);
 	quiche_config_set_max_packet_size(config, MAX_DATAGRAM_SIZE);				// UDP パケット最大サイズ。 Google の調査により QUIC では 1350 が推奨
 	quiche_config_set_initial_max_data(config, 10000000);						// initial_max_data の設定(コネクションに対する上限サイズ)
 	quiche_config_set_initial_max_stream_data_bidi_local(config, 1000000);		// initial_max_stream_data_bidi_local の設定(ローカル始動の双方向ストリームの初期フロー制御値)
@@ -394,7 +394,7 @@ quiche_config* QuicheWrapper::CreateQuicheConfig()
 	quiche_config_set_initial_max_stream_data_uni(config, 1000000);				// initial_max_stream_data_uni の設定(単方向ストリームの初期フロー制御値)
 	quiche_config_set_initial_max_streams_bidi(config, 100);					// initial_max_streams_bidi の設定(作成可能な双方向ストリームの最大値)
 	quiche_config_set_initial_max_streams_uni(config, 100);						// initial_max_streams_uni の設定(作成可能な単方向ストリームの最大値)
-	quiche_config_set_disable_migration(config, true);							// disable_active_migration の設定(コネクションマイグレーションに対応していない場合は false にする)
+	quiche_config_set_disable_active_migration(config, true);					// disable_active_migration の設定(コネクションマイグレーションに対応していない場合は false にする)
 	quiche_config_verify_peer(config, false);									// 証明書の検証の on/off 。オレオレ証明書を使う際には false にする
 
 	// TLS の鍵情報のダンプ。WireShark 等でパケットキャプチャする際に用いる
