@@ -172,16 +172,10 @@ ssize_t QuicheWrapper::Receive(SOCKET sock, quiche_conn* conn)
 
 	// 受信したパケットを quiche に渡す
 	ssize_t done = quiche_conn_recv(conn, reinterpret_cast<uint8_t*>(buf), read);
-	if (done == QUICHE_ERR_DONE)
-	{
-		// Windows 版ではここに入らないことがあるので別のトリガーで完了を見る必要がある
-		fprintf(stderr, "done reading\n");
-		return read;
-	}
-	else if (done < 0)
+	if (done < 0)
 	{
 		fprintf(stderr, "failed to process packet: %zd\n", done);
-		return -1;
+		return 0;
 	}
 
 	if (quiche_conn_is_closed(conn))
@@ -372,7 +366,7 @@ quiche_config* QuicheWrapper::CreateQuicheConfig()
 {
 	// 引数には QUIC のバージョンを渡す
 	// バージョンネゴシエーションを試したい時は 0xbabababa を渡すこと
-	quiche_config* config = quiche_config_new(0xff000017);
+	quiche_config* config = quiche_config_new(QUICHE_PROTOCOL_VERSION);
 	if (config == nullptr)
 	{
 		fprintf(stderr, "failed to create config\n");
