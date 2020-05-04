@@ -290,6 +290,12 @@ int QuicheWrapper::PollHttpResponse(quiche_conn* conn, quiche_h3_conn* http3stre
                     perror("failed to process headers");
                     // ヘッダ不正でもクローズしたいので継続
                 }
+                // body の有無をチェックしたい場合は quiche_h3_event_headers_has_body で確認できる
+                if (!quiche_h3_event_headers_has_body(ev))
+                {
+                    printf("no body");
+                    // クローズ処理あるので継続
+                }
                 break;
             }
 
