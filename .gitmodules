@@ -1,0 +1,3 @@
+[submodule "Example/WindowsNativeClient/external/quiche"]
+	path = Example/WindowsNativeClient/external/quiche
+	url = https://github.com/cloudflare/quiche.git

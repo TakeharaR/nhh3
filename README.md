@@ -17,8 +17,8 @@ http3sharp は現在作成中の C# 製の HTTP/3 クライアントライブラリです。
 # WindowsNativeClient
 
 ``Example\WindowsNativeClient`` は [quiche](https://github.com/cloudflare/quiche) の example を Windows 向けに動作可能に修正したものです。
-元としている example コードのバージョンは ``d646a60b497be4a92046fbd705161164388b73d2`` です。
-対応している HTTP/3, QUIC の draft バージョンは 23 です。
+元としている example コードのバージョンは ``c1fccd374e3aa5ee4e937173f53ba9198f7e5a0f`` です。
+対応している HTTP/3, QUIC の draft バージョンは 27 です。
 
 ### ビルド方法
 
