@@ -13,15 +13,15 @@ const char* PORT = "4433";
 
 int main(int argc, char* argv[])
 {
-	const char* host = HOST;
-	const char* port = PORT;
-	if (2 == argc)
-	{
-		host = argv[1];
-		port = argv[2];
-	}
+    const char* host = HOST;
+    const char* port = PORT;
+    if (2 == argc)
+    {
+        host = argv[1];
+        port = argv[2];
+    }
 
-	QuicheWrapper qw(host,  port);
-	
-	return qw.Execute();
+    QuicheWrapper qw(host,  port);
+    
+    return qw.Execute();
 }
