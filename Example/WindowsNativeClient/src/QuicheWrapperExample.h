@@ -9,7 +9,7 @@
 #include <BaseTsd.h>
 typedef SSIZE_T ssize_t;
 #endif
-#include "quiche\quiche.h"
+#include "quiche.h"
 
 class QuicheWrapper
 {
