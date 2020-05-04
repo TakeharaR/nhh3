@@ -23,7 +23,7 @@ http3sharp は現在作成中の C# 製の HTTP/3 クライアントライブラリです。
 ### ビルド方法
 
 Visual Studio 2019 が必要です。
-``Example\WindowsNativeClient\external\quiche`` に以下を配置して ``QuicheWrapperExample.sln`` でビルドしてください。
+``Example\WindowsNativeClient\external\quiche`` を quiche の submodule 設定にしてありますので、ここで quiche をビルドしてから Example のビルドを行ってください。
 
 - ``quiche.dll``
 - ``quiche.dll.lib``
