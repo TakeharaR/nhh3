@@ -14,16 +14,16 @@ http3sharp は現在作成中の C# 製の HTTP/3 クライアントライブラリです。
 - [quiche](https://github.com/cloudflare/quiche) の C# ラッパ(上記 C/C++ を利用)
 
 
-# WindowsNativeClient
+# QuicheWrapperExample
 
-``Example\WindowsNativeClient`` は [quiche](https://github.com/cloudflare/quiche) の example を Windows 向けに動作可能に修正したものです。
+``Example\QuicheWrapperExample`` は [quiche](https://github.com/cloudflare/quiche) の example を Windows 向けに動作可能に修正したものです。
 元としている example コードのバージョンは ``c1fccd374e3aa5ee4e937173f53ba9198f7e5a0f`` です。
 対応している HTTP/3, QUIC の draft バージョンは 27 です。
 
 ### ビルド方法
 
 Visual Studio 2019 が必要です。
-``Example\WindowsNativeClient\external\quiche`` を quiche の submodule 設定にしてありますので、ここで quiche をビルドしてから Example のビルドを行ってください。
+``External\quiche`` を quiche の submodule 設定にしてありますので、ここで quiche をビルドしてから Example のビルドを行ってください。
 
 - ``quiche.dll``
 - ``quiche.dll.lib``
