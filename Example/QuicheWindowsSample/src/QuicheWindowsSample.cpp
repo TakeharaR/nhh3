@@ -1,7 +1,7 @@
 #include <random>
 #include <inttypes.h>
 
-#include "QuicheWrapperExample.h"
+#include "QuicheWindowsSample.h"
 
 
 // quiche に受け渡す関数群定義
@@ -18,7 +18,7 @@ static int for_each_header(uint8_t* name, size_t name_len, uint8_t* value, size_
 
 // ここから QuicheWrapper 関数
 QuicheWrapper::QuicheWrapper(const char* host, const char* port)
-    : _sock(-1), _config(nullptr), _conn(nullptr), _host(host)
+    : _sock(-1), _config(nullptr), _conn(nullptr), _host(host), _streamId(-1)
 {
     WSADATA    wsaData;
     WSAStartup(MAKEWORD(2, 0), &wsaData);
@@ -66,7 +66,7 @@ int QuicheWrapper::Execute()
     Send(_conn, _sock);
     while (1)
     {
-        auto result = Receive(_sock, _conn);
+        auto result = Receive(_sock, _conn, _http3stream, _streamId);
         if (-1 == result)
         {
             return -1;
@@ -88,7 +88,9 @@ int QuicheWrapper::Execute()
     }
 
     // HTTP 通信用のストリームを作成する
-    _http3stream = CreateHttpStream(_conn, _host);
+    auto http3Value = CreateHttpStream(_conn, _host);
+    _http3stream = http3Value._http3stream;
+    _streamId = http3Value._streamId;
     if (nullptr == _http3stream)
     {
         return -1;
@@ -110,7 +112,7 @@ int QuicheWrapper::Execute()
         {
             break;
         }
-        auto recv_size = Receive(_sock, _conn);
+        auto recv_size = Receive(_sock, _conn, _http3stream, _streamId);
         if (-1 == recv_size)
         {
             return -1;
@@ -152,7 +154,7 @@ void QuicheWrapper::Send(quiche_conn* _conn, SOCKET sock)
     }
 }
 
-ssize_t QuicheWrapper::Receive(SOCKET sock, quiche_conn* conn)
+ssize_t QuicheWrapper::Receive(SOCKET sock, quiche_conn* conn, quiche_h3_conn* http3stream, int64_t streamId)
 {
     char buf[MAX_DATAGRAM_SIZE] = { 0 };
 
@@ -178,6 +180,19 @@ ssize_t QuicheWrapper::Receive(SOCKET sock, quiche_conn* conn)
         return 0;
     }
 
+    {
+        if (-1 < streamId)
+        {
+            char tmpbuf[MAX_DATAGRAM_SIZE] = { 0 };
+            ssize_t len = quiche_h3_recv_body(http3stream, conn, streamId, reinterpret_cast<uint8_t*>(tmpbuf), MAX_DATAGRAM_SIZE);
+            if (len > 0)
+            {
+                printf("got HTTP body:\n %.*s", (int)len, buf);
+            }
+        }
+    }
+
+
     if (quiche_conn_is_closed(conn))
     {
         fprintf(stderr, "connection closed\n");
@@ -187,14 +202,16 @@ ssize_t QuicheWrapper::Receive(SOCKET sock, quiche_conn* conn)
     return read;
 }
 
-quiche_h3_conn* QuicheWrapper::CreateHttpStream(quiche_conn* conn, const char* host)
+Http3StreamWrapper QuicheWrapper::CreateHttpStream(quiche_conn* conn, const char* host)
 {
+    Http3StreamWrapper http3Value;
+
     // HTTP/3 用のコンフィグを作成する
     quiche_h3_config* config = quiche_h3_config_new();
     if (config == nullptr)
     {
         fprintf(stderr, "failed to create HTTP/3 config\n");
-        return nullptr;
+        return http3Value;
     }
     // HTTP/3 固有の設定
     quiche_h3_config_set_max_header_list_size(config, 1024);             // SETTINGS_MAX_HEADER_LIST_SIZE の設定。ヘッダリストに登録できるヘッダの最大数
@@ -207,7 +224,7 @@ quiche_h3_conn* QuicheWrapper::CreateHttpStream(quiche_conn* conn, const char* h
     if (http3stream == nullptr)
     {
         fprintf(stderr, "failed to create HTTP/3 connection\n");
-        return nullptr;
+        return http3Value;
     }
 
     // HTTP リクエストの作成
@@ -253,11 +270,13 @@ quiche_h3_conn* QuicheWrapper::CreateHttpStream(quiche_conn* conn, const char* h
             .value_len = sizeof("quiche") - 1,
         },
     };
-    // quiche にヘッダリストを登録する(このタイミングではまだ通信は実施されない)
-    int64_t stream_id = quiche_h3_send_request(http3stream, conn, headers, 5, true);
-    fprintf(stderr, "sent HTTP request %" PRId64 "\n", stream_id);
 
-    return http3stream;
+    // quiche にヘッダリストを登録する(このタイミングではまだ通信は実施されない)
+    http3Value._streamId = quiche_h3_send_request(http3stream, conn, headers, 5, true);
+    fprintf(stderr, "sent HTTP request %" PRId64 "\n", http3Value._streamId);
+
+    http3Value._http3stream = http3stream;
+    return http3Value;
 }
 
 // HTTP のレスポンス待ちをする関数

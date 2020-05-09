@@ -11,6 +11,12 @@ typedef SSIZE_T ssize_t;
 #endif
 #include "quiche.h"
 
+struct Http3StreamWrapper
+{
+    quiche_h3_conn* _http3stream;    // 今回はサンプルなので 1 ストリーム
+    int64_t         _streamId;
+};
+
 class QuicheWrapper
 {
 public:
@@ -25,8 +31,8 @@ private:
 
     // Functions
     static void Send(quiche_conn* conn, SOCKET sock);
-    static ssize_t Receive(SOCKET sock, quiche_conn* conn);
-    static quiche_h3_conn* CreateHttpStream(quiche_conn* conn, const char* host);
+    static ssize_t Receive(SOCKET sock, quiche_conn* conn, quiche_h3_conn* http3stream, int64_t streamId);
+    static Http3StreamWrapper CreateHttpStream(quiche_conn* conn, const char* host);
     static int PollHttpResponse(quiche_conn* conn, quiche_h3_conn* http3stream);
     static SOCKET CreateUdpSocket(const char* host, const char* port);
     static quiche_config* CreateQuicheConfig();
@@ -37,5 +43,6 @@ private:
     quiche_config* _config;
     quiche_conn* _conn;
     quiche_h3_conn* _http3stream;    // 今回はサンプルなので 1 ストリーム
+    int64_t         _streamId;
     const char* _host;
 };

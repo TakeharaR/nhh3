@@ -1,4 +1,4 @@
-﻿#include "QuicheWrapperExample.h"
+﻿#include "QuicheWindowsSample.h"
 
 // サーバの指定
 #if 0
