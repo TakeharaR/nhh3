@@ -290,9 +290,10 @@ int QuicheWrapper::PollHttpResponse(quiche_conn* conn, quiche_h3_conn* http3stre
     quiche_h3_event* ev;
     char buf[MAX_DATAGRAM_SIZE] = { 0 };
 
+    // quiche 側に HTTP のイベントが来ているかチェック
+    // イベントを取り切るので while で回す
     while (1)
     {
-        // quiche 側に HTTP のイベントが来ているかチェック
         // ヘッダ受信、ボディ受信、ストリームのクローズの 3 種のイベントがある
         int64_t s = quiche_h3_conn_poll(http3stream, conn, &ev);
         if (s < 0)
@@ -300,7 +301,7 @@ int QuicheWrapper::PollHttpResponse(quiche_conn* conn, quiche_h3_conn* http3stre
             break;
         }
         auto ev_type = quiche_h3_event_type(ev);
-        quiche_h3_event_free(ev);
+        quiche_h3_event_free(ev);   // quiche_h3_event_type を呼んだら解放
 
         switch (ev_type)
         {
