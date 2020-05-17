@@ -26,7 +26,7 @@ Visual Studio 2019 が必要です。
 ``External\quiche`` を quiche の submodule 設定にしてありますので、ここで quiche をビルドしてから Example のビルドを行ってください。
 
 quiche の .lib/.dll ビルド方法は以下を参照してください。  
-[【HTTP/3】C#でHTTP/3通信してみる その壱 ～OSSの選定からquicheの.lib/.dllビルドまで～](https://qiita.com/takehara-ryo/items/93a7885a3193796e5a7b)
+[Re: C#(Unity)でHTTP/3通信してみる その壱 ～OSSの選定からビルドまで～](https://qiita.com/takehara-ryo/items/1f3e19b54bd6fffcba77)
 
 
 # License
