@@ -301,7 +301,6 @@ int QuicheWrapper::PollHttpResponse(quiche_conn* conn, quiche_h3_conn* http3stre
             break;
         }
         auto ev_type = quiche_h3_event_type(ev);
-        quiche_h3_event_free(ev);   // quiche_h3_event_type を呼んだら解放
 
         switch (ev_type)
         {
@@ -350,6 +349,7 @@ int QuicheWrapper::PollHttpResponse(quiche_conn* conn, quiche_h3_conn* http3stre
 
                 // ストリームがクローズされたので後始末
                 quiche_h3_conn_free(http3stream);
+                quiche_h3_event_free(ev);
                 if (quiche_conn_close(conn, true, 0, nullptr, 0) < 0)
                 {
                     perror("failed to close connection\n");
@@ -361,6 +361,7 @@ int QuicheWrapper::PollHttpResponse(quiche_conn* conn, quiche_h3_conn* http3stre
                 }
             }
         }
+        quiche_h3_event_free(ev);
     }
 
     return 1;
