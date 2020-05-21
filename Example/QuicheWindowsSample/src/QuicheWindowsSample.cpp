@@ -423,8 +423,8 @@ quiche_config* QuicheWrapper::CreateQuicheConfig()
     // QUIC 固有の設定
     // 生成した config に対して設定を適用していく(下記の設定値は quiche の example に準拠)
     // 以下に無い quiche_config_set_max_ack_delay, quiche_config_set_ack_delay_exponent はクライアントからは呼ばないこと(サーバから降ってきた値を使用する)
-    quiche_config_set_max_idle_timeout(config, 100);
-    quiche_config_set_max_packet_size(config, MAX_DATAGRAM_SIZE);                // UDP パケット最大サイズ。 Google の調査により QUIC では 1350 が推奨
+    quiche_config_set_max_idle_timeout(config, 100);                             // max_idle_timeout の設定(ミリ秒)。 0 を指定する事でタイムアウトが無制限になる
+    quiche_config_set_max_packet_size(config, MAX_DATAGRAM_SIZE);                // max_udp_payload_size の設定。 PMTU の実装を鑑みて設定を行うこと(「14. Packet Size」参照)
     quiche_config_set_initial_max_data(config, 10000000);                        // initial_max_data の設定(コネクションに対する上限サイズ)
     quiche_config_set_initial_max_stream_data_bidi_local(config, 1000000);       // initial_max_stream_data_bidi_local の設定(ローカル始動の双方向ストリームの初期フロー制御値)
     quiche_config_set_initial_max_stream_data_bidi_remote(config, 1000000);      // initial_max_stream_data_bidi_remote の設定(ピア始動の双方向ストリームの初期フロー制御値)
