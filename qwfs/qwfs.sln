@@ -1,0 +1,34 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 16
+VisualStudioVersion = 16.0.30011.22
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "qwfs", "sources\qwfs.vcxproj", "{A712B18E-EC71-4EE5-89D9-75E7CEE079EA}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "qwfsSample", "qwfsSample\qwfsSample.vcxproj", "{6D5BA41B-0A51-45E5-84B3-A52430611AC5}"
+	ProjectSection(ProjectDependencies) = postProject
+		{A712B18E-EC71-4EE5-89D9-75E7CEE079EA} = {A712B18E-EC71-4EE5-89D9-75E7CEE079EA}
+	EndProjectSection
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|x64 = Debug|x64
+		Release|x64 = Release|x64
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{A712B18E-EC71-4EE5-89D9-75E7CEE079EA}.Debug|x64.ActiveCfg = Debug|x64
+		{A712B18E-EC71-4EE5-89D9-75E7CEE079EA}.Debug|x64.Build.0 = Debug|x64
+		{A712B18E-EC71-4EE5-89D9-75E7CEE079EA}.Release|x64.ActiveCfg = Release|x64
+		{A712B18E-EC71-4EE5-89D9-75E7CEE079EA}.Release|x64.Build.0 = Release|x64
+		{6D5BA41B-0A51-45E5-84B3-A52430611AC5}.Debug|x64.ActiveCfg = Debug|x64
+		{6D5BA41B-0A51-45E5-84B3-A52430611AC5}.Debug|x64.Build.0 = Debug|x64
+		{6D5BA41B-0A51-45E5-84B3-A52430611AC5}.Release|x64.ActiveCfg = Release|x64
+		{6D5BA41B-0A51-45E5-84B3-A52430611AC5}.Release|x64.Build.0 = Release|x64
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {E5C6E735-CE75-4289-A577-FD14E5EBAAC1}
+	EndGlobalSection
+EndGlobal
