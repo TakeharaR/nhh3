@@ -497,7 +497,8 @@ namespace qwfs
         if (
             (nullptr == _quicheConnection)  ||
             (Phase::Wait > _phase)          ||
-            (_status < QwfsStatus::Wait)
+            (_status < QwfsStatus::Wait)    ||
+            (_status == QwfsStatus::Aborting)
             )
         {
             // そもそもハンドシェイクが終わってない場合、クローズ処理を開始している場合は確認不要
@@ -515,18 +516,28 @@ namespace qwfs
 
     void Connection::CheckConnectionTimeout()
     {
+        // todo : きちんとした挙動の理解
+        if (
+            (nullptr == _quicheConnection)  ||
+            (_phase < Phase::Handshake)     ||
+            (_status < QwfsStatus::Wait)
+            )
+        {
+            // クローズ処理を開始している場合は確認不要
+            return;
+        }
+
         auto timeout = quiche_conn_timeout_as_millis(_quicheConnection);
         if (0U == timeout)
         {
             // タイムアウトイベントを呼ぶ
             quiche_conn_on_timeout(_quicheConnection);
 
-            // todo : きちんとした挙動の理解
-            if (quiche_conn_is_closed(_quicheConnection))
+            if (!(_status == QwfsStatus::Aborting) && (quiche_conn_is_closed(_quicheConnection)))
             {
                 // クローズしてあげる
                 SetPhase(Phase::StartShutdown);
-                SetStatus(QwfsStatus::ErrorTimeout, "Connection close");    // abort した時とかにも入るのでメッセージも timeout に言及しない
+                SetStatus(QwfsStatus::ErrorTimeout, "Connection close");    // ソケットエラー時とかにも入るのでメッセージも timeout に言及しない
             }
         }
     }
@@ -622,8 +633,8 @@ namespace qwfs
         _h3StreamsErrorStock.clear();
         _h3StreamsStock.clear();
 
-        SetPhase(Phase::WaitShutdown);
-        SetStatus(QwfsStatus::Wait);
+        SetPhase(Phase::StartShutdown);
+        SetStatus(QwfsStatus::Aborting);
     }
 
     // パケットの初期化の実施
