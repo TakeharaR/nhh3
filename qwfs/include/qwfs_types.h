@@ -103,8 +103,8 @@ struct QwfsQuicOptions
         , _initialMaxStreamDataBidiLocal(INITIAL_MAX_DATA_SIZE)
         , _initialMaxStreamDataBidiRemote(INITIAL_MAX_DATA_SIZE)
         , _initialMaxStreamDataUni(INITIAL_MAX_DATA_SIZE)
-        , _initialMaxStreamsBidi(512U)
-        , _initialMaxStreamsUni(512U)
+        , _initialMaxStreamsBidi(128U)
+        , _initialMaxStreamsUni(128U)
     {};
 };
 
@@ -121,6 +121,7 @@ struct QwfsOptions
     bool            _verifyPeer;
     const char*     _caCertsList;
     const char*     _qlogPath;
+    uint64_t        _maxConcurrentStreams;
     QwfsH3Options   _h3Oprtions;
     QwfsQuicOptions _quicOprtions;
 

@@ -559,19 +559,20 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: cd3ea12d6b620c340b603311b17d523d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  StartButton: {fileID: 375282204}
   RetryButton: {fileID: 375282203}
   AbortButton: {fileID: 375282202}
   Status: {fileID: 375282200}
   Progress: {fileID: 375282199}
+  Body: {fileID: 1249672159}
   ErrorDetail: {fileID: 375282201}
   VerifyPeer: 0
   Port: 4433
   HostName: localhost
-  Path: 
+  Path: 1024
   SaveFilePath: 
+  QlogPath: 
   manager: {fileID: 1818178146}
-  StartButton: {fileID: 375282204}
-  Body: {fileID: 1249672159}
 --- !u!4 &662852807
 Transform:
   m_ObjectHideFlags: 0

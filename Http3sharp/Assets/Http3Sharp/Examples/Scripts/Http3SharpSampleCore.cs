@@ -140,11 +140,10 @@ public class Http3SharpSampleCore : MonoBehaviour
             {
                 VerifyPeer = VerifyPeer,
                 QlogPath = QlogPath,
+                MaxConcurrentStreams = maxMulitipleNum,
                 Quic = new Http3Sharp.QuicOptions
                 {
                     MaxIdelTimeout = 0,     // タイムアウト実験したい場合は 0 以上の値を指定してください.
-                    InitialMaxStreamsBidi = maxMulitipleNum,
-                    InitialMaxStreamsUni = maxMulitipleNum,
                 }
             });
         }

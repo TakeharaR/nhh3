@@ -97,7 +97,7 @@ namespace qwfs
 
         _options = options;
         
-        // 暫定。オプションの設定の仕方は最高の余地がある
+        // 暫定。オプションの設定の仕方は再考の余地がある
         if (nullptr != options._caCertsList)
         {
             _caCertsList = options._caCertsList;
@@ -115,6 +115,11 @@ namespace qwfs
         // エラー中も積めるがステータスは変わらない(通信処理はリトライしないと開始しない)
         if (QwfsStatus::Wait <= _status)
         {
+            if (QwfsStatus::Wait == _status)
+            {
+                // Wait の時は再スタートとしてプログレスを初期化する
+                _totalWriteSize = 0U;
+            }
             SetStatus(QwfsStatus::Connecting);
         }
 
@@ -545,8 +550,7 @@ namespace qwfs
     QwfsResult Connection::StartStream()
     {
         // 現在処理中のリクエストに空きが無ければ抜ける
-        uint64_t quicheMaxStream = min(_options._quicOprtions._initialMaxStreamsBidi, 32);     // quiche 側が 128 までしか積めないので暫定
-        if ((_h3Streams.size() >= quicheMaxStream) || (_h3StreamsStock.size() == 0))
+        if ((_h3Streams.size() >= _options._maxConcurrentStreams) || (_h3StreamsStock.size() == 0))
         {
             return QwfsResult::Ok;
         }
@@ -558,22 +562,33 @@ namespace qwfs
         }
 
         // ここまでくればリクエストの処理をして OK
-        auto canRequestNum = quicheMaxStream - _h3Streams.size();
-        for (auto num = 0; num < canRequestNum; ++num)
+        uint64_t num = 0;
+        auto canRequestNum = _options._maxConcurrentStreams - _h3Streams.size();
+        for (; num < canRequestNum; ++num)
         {
-            auto stream = _h3StreamsStock.begin();
+            auto stream = _h3StreamsStock.begin();      // 下の _h3StreamsStock 内で _h3StreamsStock は再構築されるので毎回 begin で確認
             if (_h3StreamsStock.end() == stream)
             {
                 break;
             }
-            auto result = StartStream(*stream);
-            if (QwfsResult::Ok != result)
+            auto streamId = (*stream)->Start(_quicheConnection, _quicheH3Connection);
+            if (0 > streamId)
             {
-                return result;
+                if (-12 == streamId)
+                {
+                    // ストリームの作成の限界を超えている場合に -12 が返ってくる
+                    // quiche 側の持つ peer の initial_max_streams_bidi の値が MAX_STREAMS により更新されるはずなので、しばらくまってリトライすれば解消するはず(現状しない場合もあります……)
+                    break;
+                }
+                SetPhase(Phase::Wait);
+                return SetStatus(QwfsStatus::CriticalErrorQuiche, "Failed to create stream");
             }
+            _h3StreamsMap.emplace(streamId, stream->get());  // stream id は固有値なので find 確認はしない
+            _h3Streams.push_back(std::move(*stream));
+            _h3StreamsStock.pop_front();
         }
 
-        if (QwfsStatus::Wait == _status)
+        if ((0 < num) && (QwfsStatus::Wait == _status))
         {
             // wait 状態であれば新規開始として Connecting にしてプログラスも 0 から始め直す
             SetStatus(QwfsStatus::Connecting);
@@ -581,21 +596,6 @@ namespace qwfs
         }
 
 
-        return QwfsResult::Ok;
-    }
-
-    QwfsResult Connection::StartStream(std::unique_ptr<Stream>& stream)
-    {
-        auto streamId = stream->Start(_quicheConnection, _quicheH3Connection);
-        if (0 > streamId)
-        {
-            SetPhase(Phase::Wait);
-            return SetStatus(QwfsStatus::CriticalErrorQuiche, "Failed to create stream");
-        }
-        _h3StreamsMap.emplace(streamId, stream.get());  // stream id は固有値なので find 確認はしない
-        _h3Streams.push_back(std::move(stream));
-        _h3StreamsStock.pop_front();
-    
         return QwfsResult::Ok;
     }
 

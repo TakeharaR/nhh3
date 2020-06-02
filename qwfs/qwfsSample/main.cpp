@@ -43,30 +43,18 @@ namespace QwfsTest
         QwfsOptions options;
         options._qlogPath = "F://tmp";
         options._verifyPeer = verifyPeer;
-        if (QwfsResult::Ok != qwfsSetOptions(hostId, options))
-        {
-        }
+        qwfsSetOptions(hostId, options);
 
         // メモリ版
         uint64_t memoryId = 0;
         uint64_t fileId = 1;
-        //if (QwfsResult::Ok != qwfsGetRequest(hostId, memoryId, nullptr, nullptr, nullptr, 0))
-        //{
-        //    int hoge = 0;
-        //}
-        qwfsGetRequest(hostId, memoryId, nullptr, nullptr, nullptr, 0);
-        qwfsGetRequest(hostId, memoryId, nullptr, nullptr, nullptr, 0);
-        qwfsGetRequest(hostId, memoryId, nullptr, nullptr, nullptr, 0);
-        qwfsGetRequest(hostId, memoryId, nullptr, nullptr, nullptr, 0);
-        qwfsGetRequest(hostId, memoryId, nullptr, nullptr, nullptr, 0);
-        qwfsGetRequest(hostId, memoryId, nullptr, nullptr, nullptr, 0);
-        qwfsGetRequest(hostId, memoryId, nullptr, nullptr, nullptr, 0);
-
-        // ファイル保存版
-        //if (QwfsResult::Ok != qwfsGetRequest(hostId, fileId, nullptr, "barbara.txt", nullptr, 0))
-        //{
-        //    int hoge = 0;
-        //}
+        for (auto ii = 0; ii < 128; ++ii)
+        {
+            qwfsGetRequest(hostId, memoryId, "1024 * 1024", nullptr, nullptr, 0);
+            
+            // ファイル保存版
+            // qwfsGetRequest(hostId, fileId, nullptr, "barbara.txt", nullptr, 0);
+        }
 
         auto status = QwfsStatus::Connecting;
         do 
@@ -79,9 +67,6 @@ namespace QwfsTest
             qwfsGetStatus(hostId, &status);
         } while (QwfsStatus::Connecting == status);
         
-        auto hoge = qwfsGetErrorDetail(hostId);
-
-
         qwfsDestroy(hostId);
     }
 };

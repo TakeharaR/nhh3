@@ -106,14 +106,11 @@ namespace qwfs
         _streamId = quiche_h3_send_request(_quicheH3Connection, _quicheQuicConnection, _reqHeadersForQuiche, _reqHeaders.size(), true);
         if (0 > _streamId)
         {
-            // todo : ここで -12 が返ってきた場合は peer もしくは local の initial_max_streams_bidi いずれのかの小さい方より多くのストリームを積もうとした時になる
-            // しばらくまってリトライする事により解消したいところだが、 quiche 側に local_opened_streams_bidi がデクリメントされない問題があり一度超えると復旧不能になる為に現状クリティカルエラーのままにしておく
             std::stringstream ss;
             ss << "[qwfs error][" << _hostName << "][STREAM:" << _streamId << "]Failed to quiche_h3_send_request(" << _saveFilePath << ")" << std::endl;
             SetStatus(QwfsStatus::CriticalErrorQuiche, ss.str().c_str());
         }
-
-        if (nullptr != _debugOutput)
+        else if (nullptr != _debugOutput)
         {
             std::stringstream ss;
             ss << "[qwfs info][" << _hostName << "][STREAM:" << _streamId << "]Start request" << std::endl;

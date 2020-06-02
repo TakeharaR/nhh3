@@ -119,7 +119,7 @@ public class Http3Sharp
     ///     see : QuicOptions.InitialMaxStreamsBidi, QuicOptions.InitialMaxStreamsUni
     ///     この値を利用するかは実際に利用するサーバ、経路やプロジェクトの都合に合わせて決定してください.
     /// </summary>
-    public const ulong DefaultMaxStreamSize = 512;
+    public const ulong DefaultMaxStreamSize = 128;
     #endregion
 
 
@@ -218,18 +218,13 @@ public class Http3Sharp
 
         /// <summary>
         ///     トランスポートパラメータ "initial_max_streams_bidi" (作成可能な双方向ストリームの最大値) の設定.
-        ///     同時にリクエストしたい数はこの値により制御できます.
-        ///     あまりに大きな値にし過ぎるとファイル I/O での処理落ちやストリーム単位でのタイムアウトの可能性が挙がります.
-        ///     逆に小さい値にし過ぎるとパフォーマンスが十分に出ないことがあります.
-        ///     ファイル保存の有無やリクエストで取得するデータ特性(サイズ等)に合わせて設定してください.
-        ///     また、当値よりサーバから取得した "initial_max_streams_bidi" が小さい場合、サーバ側の値が使われますが、現状どちらの値が使われているか取得する方法はありません.
-        ///     将来的に何とかする予定です.
+        ///     クライアントからの作成最大値ではなく、サーバ側からの最大値であることに注意してください.
+        ///     つまり、リクエストの最大数の制御には利用できません.
         /// </summary>
         public ulong InitialMaxStreamsBidi { get; set; } = DefaultMaxStreamSize;
 
         /// <summary>
         ///     トランスポートパラメータ "initial_max_streams_uni" (作成可能な単方向ストリームの最大値) の設定.
-        ///     主にコントロールストリームに利用されるので Bidi にあわせた値にすることをお勧めします.
         /// </summary>
         public ulong InitialMaxStreamsUni { get; set; } = DefaultMaxStreamSize;
     }
@@ -259,6 +254,13 @@ public class Http3Sharp
         /// </summary>
         [MarshalAs(UnmanagedType.LPStr)]
         public string QlogPath = string.Empty;
+
+        /// <summary>
+        ///     同時に送信可能なリクエストの最大値です.
+        ///     実際のリクエスト最大値は、この値とサーバから送信されてくる initial_max_streams_bidi 及び MAX_STREAMS の値から決定されます.
+        ///     最大限に並列ダウンロードの効率を上げたい場合はサーバサイドの設定と合わせてこの値を調整してください.
+        /// </summary>
+        public ulong MaxConcurrentStreams = 128;
 
         public Http3Options H3 { get; set; } = new Http3Sharp.Http3Options();
 
