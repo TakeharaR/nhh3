@@ -569,7 +569,7 @@ MonoBehaviour:
   VerifyPeer: 0
   Port: 4433
   HostName: localhost
-  Path: 1024
+  Path: 
   SaveFilePath: 
   QlogPath: 
   manager: {fileID: 1818178146}

@@ -17,8 +17,6 @@ public class Http3SharpSampleMulti : Http3SharpSampleCore
 
     /// <summary>
     ///     ダウンロードを行うファイル数.
-    ///     下層で利用している quiche の問題により累計 129 個目のリクエストを出すとエラーが発生します.
-    ///     エラー発生後は ABORT 等でコネクションを張り直す必要があります.
     /// </summary>
     [SerializeField]
     private ulong DownloadFileNum = 128;

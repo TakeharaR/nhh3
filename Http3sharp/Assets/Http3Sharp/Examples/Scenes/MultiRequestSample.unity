@@ -727,7 +727,7 @@ MonoBehaviour:
   HostName: localhost
   Path: 
   SaveFilePath: 
-  QlogPath: C:\tmp\qlog
+  QlogPath: 
   manager: {fileID: 1818178146}
   CompletedDownloadFileNum: {fileID: 714444170}
   DownloadProgressBar: {fileID: 8382759}
