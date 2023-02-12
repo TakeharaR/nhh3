@@ -3,15 +3,9 @@
 
 #include "qwfs.h"
 
-static void NormalDebugOutput(const char* line)
+static void NormalDebugOutput(const char* output)
 {
-    fprintf(stderr, "%s\n", line);
-}
-
-static void QuicheDebugOutput(const char* line, void* arg)
-{
-    auto func = reinterpret_cast<DebugOutputCallback>(arg);
-    func(line);
+    fprintf(stderr, "%s\n", output);
 }
 
 // 後で整備
@@ -41,19 +35,19 @@ namespace QwfsTest
         auto hostId = qwfsCreate(host, port, callbacks);
 
         QwfsOptions options;
-        options._qlogPath = "F://tmp";
+        options._qlogPath = "G://tmp";
         options._verifyPeer = verifyPeer;
         qwfsSetOptions(hostId, options);
 
         // メモリ版
         uint64_t memoryId = 0;
         uint64_t fileId = 1;
-        for (auto ii = 0; ii < 128; ++ii)
+        for (auto ii = 0; ii < 1; ++ii)
         {
-            qwfsGetRequest(hostId, memoryId, "1024 * 1024", nullptr, nullptr, 0);
+            qwfsGetRequest(hostId, memoryId, nullptr, nullptr, nullptr, 0);
             
             // ファイル保存版
-            // qwfsGetRequest(hostId, fileId, nullptr, "barbara.txt", nullptr, 0);
+            //qwfsGetRequest(hostId, fileId, nullptr, "barbara.txt", nullptr, 0);
         }
 
         auto status = QwfsStatus::Connecting;
@@ -62,7 +56,7 @@ namespace QwfsTest
             qwfsUpdate(hostId);
             qwfsIssueCallbacks(hostId);
 
-            //std::this_thread::sleep_for(std::chrono::milliseconds());
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
 
             qwfsGetStatus(hostId, &status);
         } while (QwfsStatus::Connecting == status);
@@ -73,10 +67,9 @@ namespace QwfsTest
 
 
 // サーバの指定
-#if 0
+#if 1
 // 外部サイトを使う場合
-const char* HOST = "quic.aiortc.org";
-//const char* HOST = "blog.cloudflare.com";
+const char* HOST = "cloudflare-quic.com";
 const char* PORT = "443";
 #else
 const char* HOST = "localhost";
@@ -86,13 +79,11 @@ const char* PORT = "4433";
 int main()
 {
     qwfsInitialize();
-    QwfsTest::Excute(HOST, PORT, false);
-    //QwfsTest::Excute("blog.cloudflare.com", "443", true);
+    QwfsTest::Excute(HOST, PORT, true);
     qwfsUninitialize();
 
     // 再初期化チェック
     //qwfsInitialize();
-    //QwfsTest::Excute(HOST, PORT, false);
-    //QwfsTest::Excute("blog.cloudflare.com", "443", true);
+    //QwfsTest::Excute(HOST, PORT, true);
     //qwfsUninitialize();
 }

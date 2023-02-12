@@ -9,6 +9,7 @@
 #include <deque>
 #include <string>
 #include <functional>
+#include <memory>
 
 #include "quiche.h"
 
@@ -67,6 +68,8 @@ namespace qwfs
         std::string         _hostName;
         std::string         _port;
         SOCKET              _sock;              // 将来的に機種非依存ラッピング層を作成
+        struct addrinfo*    _peerAddInfo;
+        struct addrinfo*    _localAddInfo;
         QwfsOptions         _options;
         std::string         _caCertsList;
         std::string         _qlogPath;
@@ -92,6 +95,7 @@ namespace qwfs
 
         // functions
         void ClearConfig();
+        void ClearQuicheConnection(Connection* connection) const;
         QwfsResult SetOptionsInternal();
         quiche_config* CreateQuicheConfig(const QwfsOptions& options) const;
         quiche_h3_config* CreateQuicheHttp3Config(const QwfsOptions& options) const;

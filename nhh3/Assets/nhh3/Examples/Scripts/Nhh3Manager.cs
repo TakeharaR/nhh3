@@ -1,10 +1,7 @@
 ﻿using AOT;
-using System.Collections.Generic;
-using System.Text;
 using UnityEngine;
-using UnityEngine.UI;
 
-public class Http3SharpManager : MonoBehaviour
+public class Nhh3Manager : MonoBehaviour
 {
     [SerializeField]
     private GameObject manager = null;
@@ -13,11 +10,11 @@ public class Http3SharpManager : MonoBehaviour
     {
         DontDestroyOnLoad(manager);
         
-        Http3Sharp.SetDebugLogCallback(DebugLog);
-        Http3Sharp.Initialize();
+        Nhh3.SetDebugLogCallback(DebugLog);
+        Nhh3.Initialize();
     }
 
-    [MonoPInvokeCallback(typeof(Http3Sharp.DebugLogCallback))]
+    [MonoPInvokeCallback(typeof(Nhh3.DebugLogCallback))]
     private static void DebugLog(string message)
     {
         UnityEngine.Debug.Log(message);
@@ -25,6 +22,6 @@ public class Http3SharpManager : MonoBehaviour
 
     void OnDestroy()
     {
-        Http3Sharp.Uninitialize();
+        Nhh3.Uninitialize();
     }
 }

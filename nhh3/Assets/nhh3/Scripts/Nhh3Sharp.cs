@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
 
-public class Http3Sharp
+public class Nhh3
 {
     #region Enum Definitions
     /// <summary>
@@ -125,7 +125,7 @@ public class Http3Sharp
 
     #region Callback Definisions
     /// <summary>
-    ///     Http3Sharp 及びその下層ライブラリである qwfs のデバッグログ出力を繋ぐための delegat.
+    ///     Nhh3 及びその下層ライブラリである qwfs のデバッグログ出力を繋ぐための delegat.
     /// </summary>
     public delegate void DebugLogCallback(string message);
     #endregion
@@ -262,9 +262,9 @@ public class Http3Sharp
         /// </summary>
         public ulong MaxConcurrentStreams = 128;
 
-        public Http3Options H3 { get; set; } = new Http3Sharp.Http3Options();
+        public Http3Options H3 { get; set; } = new Nhh3.Http3Options();
 
-        public QuicOptions Quic { get; set; } = new Http3Sharp.QuicOptions();
+        public QuicOptions Quic { get; set; } = new Nhh3.QuicOptions();
     }
     #endregion
 
@@ -373,34 +373,34 @@ public class Http3Sharp
     #region Properties
     /// <summary>
     ///     Pseudo-Header の ":authority" に登録される値.
-    ///     Http3Sharp のコンストラクタで渡した hostName 及び port が結合された値が格納されています.
+    ///     Nhh3 のコンストラクタで渡した hostName 及び port が結合された値が格納されています.
     /// </summary>
-    public string Authority => http3SharpImpl.Authority;
+    public string Authority => Nhh3Impl.Authority;
     #endregion
 
 
     #region Static Functions
     /// <summary>
-    ///     Http3Sharp が依存する Native ライブラリの初期化処理を行います.
+    ///     Nhh3 が依存する Native ライブラリの初期化処理を行います.
     ///     アプリケーション起動時に必ず呼び出してください.
     ///     重複呼び出し時には内部的に Uninitialize が呼び出され、全てのインスタンスが一度破棄されます.
     /// </summary>
     public static void Initialize()
     {
-        Http3SharpImpl.Initialize();
+        Nhh3Impl.Initialize();
     }
 
     /// <summary>
-    ///     作成された全てのホストの Http3Sharp インスタンスが破棄されます.
+    ///     作成された全てのホストの Nhh3 インスタンスが破棄されます.
     ///     Unity Editor 終了時等、アプリケーション終了時に必ず呼び出してください.
     /// </summary>
     public static void Uninitialize()
     {
-        Http3SharpImpl.Uninitialize();
+        Nhh3Impl.Uninitialize();
     }
 
     /// <summary>
-    ///     Http3Sharp 及び下層で利用している Native ライブラリである qwfs のログ出力先を設定します.
+    ///     Nhh3 及び下層で利用している Native ライブラリである qwfs のログ出力先を設定します.
     ///     インスタンス別ではなく、全てで共通の設定なので注意してください.
     ///     現状 Initialize 呼び出し前に呼び出す必要があります.
     ///     ※将来的にはインスタンス単位の設定や通信中にも切り替え可能になる予定です.
@@ -408,36 +408,36 @@ public class Http3Sharp
     /// <param name="debug">ログの出力を行う delegate.</param>
     public static void SetDebugLogCallback(DebugLogCallback debug)
     {
-        Http3SharpImpl.DebugLog = debug;
+        Nhh3Impl.DebugLog = debug;
     }
     #endregion
 
 
     #region Functions
     /// <summary>
-    ///     Http3Sharp インスタンスの作成を行います.
-    ///     インスタンスの作成後、 Http3Sharp は指定したホストに対して実行スレッドを別途作成し、ハンドシェイクを開始します.
+    ///     Nhh3 インスタンスの作成を行います.
+    ///     インスタンスの作成後、 Nhh3 は指定したホストに対して実行スレッドを別途作成し、ハンドシェイクを開始します.
     ///     ハンドシェイクの成否を監視する為、リクエストを発行する前から Update を呼び出し status をの値を確認してください.
     /// </summary>
-    /// <param name="hostName">この値と port を合わせた Authority により Http3Sharp の Native インスタンスは管理されます.重複する HostName を登録しようとした場合は例外が送出されます.</param>
-    /// <param name="port">この値を基に Http3Sharp の Native インスタンスが管理されます.重複する HostName を登録しようとした場合は例外が送出されます.</param>
+    /// <param name="hostName">この値と port を合わせた Authority により Nhh3 の Native インスタンスは管理されます.重複する HostName を登録しようとした場合は例外が送出されます.</param>
+    /// <param name="port">この値を基に Nhh3 の Native インスタンスが管理されます.重複する HostName を登録しようとした場合は例外が送出されます.</param>
     /// <param name="options">see : ConnectionOptions</param>
-    public Http3Sharp(string hostName, string port, ConnectionOptions options)
+    public Nhh3(string hostName, string port, ConnectionOptions options)
     {
-        http3SharpImpl = new Http3SharpImpl(hostName, port, options);
+        Nhh3Impl = new Nhh3Impl(hostName, port, options);
     }
 
     /// <summary>
-    ///     Http3Sharp インスタンスを破棄します.
-    ///     Http3Sharp は裏でスレッド動作を行う為、当処理を必ず呼び出し、スレッド・リソースの解放を行ってください.
+    ///     Nhh3 インスタンスを破棄します.
+    ///     Nhh3 は裏でスレッド動作を行う為、当処理を必ず呼び出し、スレッド・リソースの解放を行ってください.
     /// </summary>
     public void Destroy()
     {
-        http3SharpImpl.Destroy();
+        Nhh3Impl.Destroy();
     }
 
     /// <summary>
-    ///     Http3Sharp の実行スレッドをロックし、終了したリクエストを取得します.
+    ///     Nhh3 の実行スレッドをロックし、終了したリクエストを取得します.
     ///     また、同時にステータスやプログレスも取得します.
     ///     ※ロックの回数を減らす為に一度に多くの処理を実行しています
     /// </summary>
@@ -447,7 +447,7 @@ public class Http3Sharp
     /// <returns></returns>
     public List<ResponseParamaters> Update(out Status status, out ulong progress, out ulong totalWriteSize)
     {
-        return http3SharpImpl.Update(out status, out progress, out totalWriteSize);
+        return Nhh3Impl.Update(out status, out progress, out totalWriteSize);
     }
 
     /// <summary>
@@ -457,7 +457,7 @@ public class Http3Sharp
     /// <param name="requests">see RequestParamaters</param>
     public void PublishRequest(IEnumerable<RequestParamaters> requests)
     {
-        http3SharpImpl.PublishRequest(requests);
+        Nhh3Impl.PublishRequest(requests);
     }
 
     /// <summary>
@@ -466,30 +466,30 @@ public class Http3Sharp
     /// </summary>
     public void Retry()
     {
-        http3SharpImpl.Retry();
+        Nhh3Impl.Retry();
     }
 
     /// <summary>
     ///     通信中の処理を中断、もしくはエラー状態のライブラリの保持するリクエストを全て破棄します.
-    ///     Abort された Http3Sharp インスタンスはハンドシェイクからやり直しを行います.
+    ///     Abort された Nhh3 インスタンスはハンドシェイクからやり直しを行います.
     ///     再度 PublishRequest を呼び出すことによりリクエストの再開が可能です.
     /// </summary>
     public void Abort()
     {
-        http3SharpImpl.Abort();
+        Nhh3Impl.Abort();
     }
 
     /// <summary>
-    ///     Http3Sharp インスタンス全体のエラー詳細を取得します.
+    ///     Nhh3 インスタンス全体のエラー詳細を取得します.
     /// </summary>
     public string GetErrorDetail()
     {
-        return http3SharpImpl.GetErrorDetail();
+        return Nhh3Impl.GetErrorDetail();
     }
     #endregion
 
 
     #region Private Module
-    private readonly Http3SharpImpl http3SharpImpl = null;
+    private readonly Nhh3Impl Nhh3Impl = null;
     #endregion
 }
