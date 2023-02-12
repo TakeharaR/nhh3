@@ -177,7 +177,11 @@ namespace qwfs
         {
             return QwfsResult::ErrorInvalidArg;
         }
-        connection->Abort();
+        auto status = connection->GetStatus();
+        if ((QwfsStatus::Wait == status) || (QwfsStatus::Connecting == status) || (QwfsStatus::Completed == status))
+        {
+            connection->Abort();
+        }
         return QwfsResult::Ok;
     }
 
@@ -194,12 +198,6 @@ namespace qwfs
             return nullptr;
         }
         return connection->GetErrorDetail();
-    }
-
-    static void QuicheDebugOutput(const char* line, void* arg)
-    {
-        auto func = reinterpret_cast<DebugOutputCallback>(arg);
-        func(line);
     }
 
     // FXb’è

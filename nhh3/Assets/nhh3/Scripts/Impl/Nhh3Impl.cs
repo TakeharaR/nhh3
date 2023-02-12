@@ -8,7 +8,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using UnityEngine.Assertions.Must;
 
-public class Http3SharpImpl
+public class Nhh3Impl
 {
     public enum QwfsResult
     {
@@ -27,14 +27,14 @@ public class Http3SharpImpl
     #region Constants
     const ulong INVALID_HOST_ID = ulong.MaxValue;
 
-    public static Http3Sharp.DebugLogCallback DebugLog { get; set; } = null;
+    public static Nhh3.DebugLogCallback DebugLog { get; set; } = null;
     #endregion
 
 
     #region Callbacks
     public delegate void SuccessFileCallback(ulong hostId, ulong responseCode, IntPtr headers, ulong headersSize, string filePath);
     public delegate void SuccessBinaryCallback(ulong hostId, ulong responseCode, IntPtr headers, ulong headersSize, IntPtr body, ulong bodySize);
-    public delegate void ErrorCallback(ulong hostId, Http3Sharp.Status status, string errorDetail);
+    public delegate void ErrorCallback(ulong hostId, Nhh3.Status status, string errorDetail);
 
     public struct Callbacks
     {
@@ -63,17 +63,17 @@ public class Http3SharpImpl
 
     public static void Uninitialize()
     {
-        foreach (var host in _Http3SharpImplList)
+        foreach (var host in _Nhh3ImplList)
         {
             host.Value.Destroy(false);
         }
-        _Http3SharpImplList.Clear();
+        _Nhh3ImplList.Clear();
         _responseForEachHost.Clear();
         qwfsUninitialize();
     }
 
-    private static Dictionary<ulong, Http3SharpImpl> _Http3SharpImplList = new Dictionary<ulong, Http3SharpImpl>();
-    private static Dictionary<ulong, List<Http3Sharp.ResponseParamaters>> _responseForEachHost = new Dictionary<ulong, List<Http3Sharp.ResponseParamaters>>();
+    private static Dictionary<ulong, Nhh3Impl> _Nhh3ImplList = new Dictionary<ulong, Nhh3Impl>();
+    private static Dictionary<ulong, List<Nhh3.ResponseParamaters>> _responseForEachHost = new Dictionary<ulong, List<Nhh3.ResponseParamaters>>();
     #endregion
 
 
@@ -88,17 +88,17 @@ public class Http3SharpImpl
 
     private Task                    _task;
     private CancellationTokenSource _cToken;
-    private object                  _lockObject = new object();
+    private object                  _lockObject;
     #endregion
 
     #region Functions
-    public Http3SharpImpl(string hostName, string port, Http3Sharp.ConnectionOptions options)
+    public Nhh3Impl(string hostName, string port, Nhh3.ConnectionOptions options)
     {
         _cToken = new CancellationTokenSource();
+        _lockObject = new object();
         Authority = hostName + port;
         _hostName = hostName;
         _port = port;
-        
 
         // native 側のインスタンスの生成やコールバックの登録
         _hostId = qwfsCreate(hostName, port, new Callbacks { SuccessFile = RequestFileSuccess, SuccessBinary = RequestBinarySuccess, Error = RequestError });
@@ -107,7 +107,7 @@ public class Http3SharpImpl
         // 
         if (!_responseForEachHost.ContainsKey(_hostId))
         {
-            _responseForEachHost.Add(_hostId, new List<Http3Sharp.ResponseParamaters>());
+            _responseForEachHost.Add(_hostId, new List<Nhh3.ResponseParamaters>());
         }
 
         // そのうち単独呼び出しにするかも
@@ -122,7 +122,7 @@ public class Http3SharpImpl
         var result = qwfsSetOptions(_hostId, options);
         Debug.Assert(QwfsResult.Ok == result);
 
-        _Http3SharpImplList.Add(_hostId, this);
+        _Nhh3ImplList.Add(_hostId, this);
 
         // Update 用のタスクをこの時点から走らせ始める(リクエストが無くてもハンドシェイクが始まる為)
         _task = Task.Run(() =>
@@ -133,7 +133,7 @@ public class Http3SharpImpl
 
     public void Destroy(bool removeList = true)
     {
-        if (_Http3SharpImplList.ContainsKey(_hostId))
+        if (_Nhh3ImplList.ContainsKey(_hostId))
         {
             _cToken.Cancel();
             _task.Wait();
@@ -144,13 +144,13 @@ public class Http3SharpImpl
             }
             if (removeList)
             {
-                _Http3SharpImplList.Remove(_hostId);
+                _Nhh3ImplList.Remove(_hostId);
             }
         }
         
     }
 
-    public void PublishRequest(IEnumerable<Http3Sharp.RequestParamaters> requests)
+    public void PublishRequest(IEnumerable<Nhh3.RequestParamaters> requests)
     {
         lock (_lockObject)
         {
@@ -175,11 +175,11 @@ public class Http3SharpImpl
         }
     }
 
-    public List<Http3Sharp.ResponseParamaters> Update(out Http3Sharp.Status status, out ulong progress, out ulong totalWriteSize)
+    public List<Nhh3.ResponseParamaters> Update(out Nhh3.Status status, out ulong progress, out ulong totalWriteSize)
     {
         // Update スレッドの監視とか本当はした方がいいがとりあえずなし
 
-        status = Http3Sharp.Status.Wait;
+        status = Nhh3.Status.Wait;
         progress = 0;
         totalWriteSize = 0;
         _responseForEachHost[_hostId].Clear();
@@ -227,11 +227,11 @@ public class Http3SharpImpl
     #endregion
 
 
-    private static void ReadResponseHeaders(IntPtr headers, ulong headersSize, ref Http3Sharp.ResponseParamaters res)
+    private static void ReadResponseHeaders(IntPtr headers, ulong headersSize, ref Nhh3.ResponseParamaters res)
     {
         int elementSize = Marshal.SizeOf(typeof(IntPtr));
         IntPtr ptr;
-        res.Headers = new Http3Sharp.Headers[headersSize / 2];
+        res.Headers = new Nhh3.Headers[headersSize / 2];
         for (int num = 0; num < (int)headersSize; ++num)
         {
             ptr = Marshal.ReadIntPtr(headers, elementSize * num);
@@ -252,7 +252,7 @@ public class Http3SharpImpl
     {
         Debug.Assert(_responseForEachHost.ContainsKey(hostId));
 
-        var res = new Http3Sharp.ResponseParamaters
+        var res = new Nhh3.ResponseParamaters
         {
             SaveFilePath = filePath,
             ResponseCode = responseCode,
@@ -266,7 +266,7 @@ public class Http3SharpImpl
     {
         Debug.Assert(_responseForEachHost.ContainsKey(hostId));
 
-        var res = new Http3Sharp.ResponseParamaters
+        var res = new Nhh3.ResponseParamaters
         {
             ResponseCode = responseCode,
         };
@@ -288,11 +288,11 @@ public class Http3SharpImpl
     }
 
     [MonoPInvokeCallback(typeof(ErrorCallback))]
-    private static void RequestError(ulong hostId, Http3Sharp.Status status, string errorDetail)
+    private static void RequestError(ulong hostId, Nhh3.Status status, string errorDetail)
     {
         Debug.Assert(_responseForEachHost.ContainsKey(hostId));
 
-        var res = new Http3Sharp.ResponseParamaters
+        var res = new Nhh3.ResponseParamaters
         {
             Status = status,
             ErrorMessage = errorDetail,
@@ -313,32 +313,41 @@ public class Http3SharpImpl
                 break;
             }
 
-            QwfsResult result;
-            if (1 == Interlocked.Exchange(ref _requestRetry, 0))
+            try
             {
+                QwfsResult result;
+                if (1 == Interlocked.Exchange(ref _requestRetry, 0))
+                {
+                    lock (_lockObject)
+                    {
+                        result = qwfsRetry(_hostId);
+                    }
+                    Debug.Assert(QwfsResult.Ok == result);
+                }
+                if (1 == Interlocked.Exchange(ref _requestAbort, 0))
+                {
+                    lock (_lockObject)
+                    {
+                        result = qwfsAbort(_hostId);
+                    }
+                    Debug.Assert(QwfsResult.Ok == result);
+                }
+
                 lock (_lockObject)
                 {
-                    result = qwfsRetry(_hostId);
+                    result = qwfsUpdate(_hostId);
+                    // ここの結果は色々返るが status 側で見るのでスルー(要改善)
                 }
-                Debug.Assert(QwfsResult.Ok == result);
-            }
-            if (1 == Interlocked.Exchange(ref _requestAbort, 0))
-            {
-                lock (_lockObject)
-                {
-                    result = qwfsAbort(_hostId);
-                }
-                Debug.Assert(QwfsResult.Ok == result);
-            }
 
-            lock (_lockObject)
-            {
-                result = qwfsUpdate(_hostId);
-                // ここの結果は色々返るが status 側で見るのでスルー(要改善)
+                // todo : 処理負荷を見た wait
+                Thread.Sleep(1);
             }
-
-            // todo : 処理負荷を見た wait
-            Thread.Sleep(1);
+            catch (Exception e)
+            {
+                // callback 内で例外発生時にスレッドが消し飛んでしまうのを抑止
+                // 本当はエラー停止すべきなので暫定
+                UnityEngine.Debug.Log(e.Message);
+            }
         }
         _cToken.Dispose();
     }
@@ -360,16 +369,16 @@ public class Http3SharpImpl
     private static extern void qwfsUninitialize();
 
     [DllImport(PluginName, CharSet = CharSet.Ansi)]
-    private static extern ulong qwfsCreate([In] string hostName, [In] string port, Http3SharpImpl.Callbacks callbacks);
+    private static extern ulong qwfsCreate([In] string hostName, [In] string port, Nhh3Impl.Callbacks callbacks);
 
     [DllImport(PluginName)]
     private static extern QwfsResult qwfsDestroy(ulong hostId);
 
     [DllImport(PluginName, CharSet = CharSet.Ansi)]
-    private static extern QwfsResult qwfsSetOptions(ulong hostId, Http3Sharp.ConnectionOptions options);
+    private static extern QwfsResult qwfsSetOptions(ulong hostId, Nhh3.ConnectionOptions options);
 
     [DllImport(PluginName, CharSet = CharSet.Ansi)]
-    private static extern QwfsResult qwfsGetRequest(ulong hostId, ulong streamId, [In] string path, [In] string saveFilePath, [MarshalAs(UnmanagedType.LPArray, SizeParamIndex = 5)] Http3Sharp.Headers[] headers, ulong headersSize);
+    private static extern QwfsResult qwfsGetRequest(ulong hostId, ulong streamId, [In] string path, [In] string saveFilePath, [MarshalAs(UnmanagedType.LPArray, SizeParamIndex = 5)] Nhh3.Headers[] headers, ulong headersSize);
 
     [DllImport(PluginName)]
     private static extern QwfsResult qwfsUpdate(ulong hostId);
@@ -378,7 +387,7 @@ public class Http3SharpImpl
     private static extern QwfsResult qwfsIssueCallbacks(ulong hostId);
 
     [DllImport(PluginName)]
-    private static extern QwfsResult qwfsGetStatus(ulong hostId, out Http3Sharp.Status status);
+    private static extern QwfsResult qwfsGetStatus(ulong hostId, out Nhh3.Status status);
 
     [DllImport(PluginName)]
     private static extern QwfsResult qwfsGetProgress(ulong hostId, out ulong progress, out ulong totalWriteSize);
@@ -393,7 +402,7 @@ public class Http3SharpImpl
     private static extern IntPtr qwfsGetErrorDetail(ulong hostId);
 
     [DllImport(PluginName, CharSet = CharSet.Ansi)]
-    private static extern QwfsResult qwfsSetDebugOutput(Http3Sharp.DebugLogCallback debugLog);
+    private static extern QwfsResult qwfsSetDebugOutput(Nhh3.DebugLogCallback debugLog);
 
     #endregion
 }

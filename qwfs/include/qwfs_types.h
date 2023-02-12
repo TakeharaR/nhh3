@@ -40,8 +40,10 @@ enum class QwfsStatus
     ErrorConnectionClose    = -5,
     ErrorInvalidServer      = -6,     // サーバから受け取った値がおかしい際のエラー(transport 層)
     ErrorInvalidResponse    = -7,     // サーバから受け取った値がおかしい際のエラー(HTTP 層)
-    ErrorTlsFail            = -8,     // TLS Handshake に失敗(不正な証明書)
-    ErrorNetwork            = -9,
+    ErrorTlsInvalidCert     = -8,     // TLS Handshake に失敗(不正な証明書)
+    ErrorTls                = -9,     // TLS に失敗(証明書以外の理由)
+    ErrorNetwork            = -10,
+    ErrorVersionFallback    = -11,    // HTTP/3 で接続できず HTTP/1.1 経由で再接続する必要がある
     ErrorFileIO             = -30,
 
     // 正常な状態
@@ -74,8 +76,9 @@ struct QwfsH3Options
     uint64_t _maxHeaderListSize;
     uint64_t _qpackMaxTableCapacity;
     uint64_t _qpackBlockedStreams;
+    bool     _settingsEnableConnectProtocol;
 
-    QwfsH3Options() : _maxHeaderListSize(1024U), _qpackMaxTableCapacity(1024U), _qpackBlockedStreams(512U) {};
+    QwfsH3Options() : _maxHeaderListSize(1024U), _qpackMaxTableCapacity(1024U), _qpackBlockedStreams(512U), _settingsEnableConnectProtocol(false) {};
 };
 
 // BOOL で受けた方がメモリレイアウト的には良いかも
@@ -92,6 +95,9 @@ struct QwfsQuicOptions
     uint64_t    _initialMaxStreamDataUni;
     uint64_t    _initialMaxStreamsBidi;
     uint64_t    _initialMaxStreamsUni;
+    uint64_t    _maxConnectionWindowSize;
+    uint64_t    _maxStreamWindowSize;
+    uint64_t    _activeConnectionIdLimit;
 
     QwfsQuicOptions() : 
         _disableActiveMigration(false)
@@ -105,6 +111,9 @@ struct QwfsQuicOptions
         , _initialMaxStreamDataUni(INITIAL_MAX_DATA_SIZE)
         , _initialMaxStreamsBidi(128U)
         , _initialMaxStreamsUni(128U)
+        , _maxConnectionWindowSize(25165824U)       // from quiche /src/args.rs
+        , _maxStreamWindowSize(16777216U)           // from quiche /src/args.rs
+        , _activeConnectionIdLimit(2U)              // from quiche /src/args.rs
     {};
 };
 

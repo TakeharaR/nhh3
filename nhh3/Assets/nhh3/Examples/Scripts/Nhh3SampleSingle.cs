@@ -4,23 +4,23 @@ using System.Text;
 /// <summary>
 ///     単発のダウンロードを行うサンプルです.
 /// </summary>
-public class Http3SharpSampleSingle : Http3SharpSampleCore
+public class Nhh3SampleSingle : Nhh3SampleCore
 {
     public void OnStartClick()
     {
         CreateHttp3();
-        var list = new List<Http3Sharp.RequestParamaters>
+        var list = new List<Nhh3.RequestParamaters>
         {
-            new Http3Sharp.RequestParamaters
+            new Nhh3.RequestParamaters
             {
                 Path = Path,
                 SaveFilePath = SaveFilePath,
-                Headers = new Http3Sharp.Headers[4]
+                Headers = new Nhh3.Headers[4]
                 {
-                    new Http3Sharp.Headers{ Name = "hoge0", Value = "var0" },
-                    new Http3Sharp.Headers{ Name = "hoge1", Value = "var1" },
-                    new Http3Sharp.Headers{ Name = "hoge2", Value = "var2" },
-                    new Http3Sharp.Headers{ Name = "hoge3", Value = "var3" },
+                    new Nhh3.Headers{ Name = "hoge0", Value = "var0" },
+                    new Nhh3.Headers{ Name = "hoge1", Value = "var1" },
+                    new Nhh3.Headers{ Name = "hoge2", Value = "var2" },
+                    new Nhh3.Headers{ Name = "hoge3", Value = "var3" },
                 }
             }
         };

@@ -7,7 +7,7 @@ using UnityEngine.UI;
 ///     aioquic の GET/NNNN 機能を用いて多重ダウンロードのテストを行うサンプルです.
 ///     ダウンロードするデータのサイズは 1K ～ 1M の間のランダム値です.
 /// </summary>
-public class Http3SharpSampleMulti : Http3SharpSampleCore
+public class Nhh3SampleMulti : Nhh3SampleCore
 {
     [SerializeField]
     private Text CompletedDownloadFileNum = default;
@@ -44,12 +44,12 @@ public class Http3SharpSampleMulti : Http3SharpSampleCore
 
         // 1k-10M のデータを DownloadFileNum 個ダウンロードする
         TotalDownloadSize = 0;
-        var list = new List<Http3Sharp.RequestParamaters>();
+        var list = new List<Nhh3.RequestParamaters>();
         for (ulong num = 0; num < DownloadFileNum; ++num)
         {
             var fileSize = (ulong)new System.Random().Next(1, 1000) * 1024;
             TotalDownloadSize += fileSize;
-            list.Add(new Http3Sharp.RequestParamaters
+            list.Add(new Nhh3.RequestParamaters
             {
                 SaveFilePath = $"{WorkDir}\\{num}",
                 Path = $"{fileSize}",

@@ -1,8 +1,8 @@
 #include <cassert>
 #include <sstream>
+#include <iomanip>
 
 #include "qwfs_h3_stream.h"
-#include <iomanip>
 
 const uint64_t DEFAULT_HEADERS_NUM = 5U;
 
@@ -315,37 +315,83 @@ namespace qwfs
 
     QwfsStatus Stream::ConvertQuicheH3ErrorToStatus(quiche_h3_error error, QwfsStatus nowStatus) const
     {
-        // ConvertQuicheErrorToStatus と同じ
         switch (error)
         {
-        // 内部的に通信続行で直りそうなもの
-        case QUICHE_H3_ERR_DONE:
-        case QUICHE_H3_ERR_TRANSPORT_ERROR:         // 内部的にリトライして勝手に通信復旧するようなので何もしない(動作確認済み)
-        case QUICHE_H3_ERR_STREAM_BLOCKED:          // QUIC 内に余裕ができればリトライで直るっぽいのでここにしておく(動作未確認)
-        case QUICHE_H3_ERR_EXCESSIVE_LOAD:          // 過負荷による輻輳制御発生時に起きるっぽいのでここにしておく(動作未確認)
-        case QUICHE_H3_ERR_FRAME_UNEXPECTED:        // サーバ側が間違ったフレームを送ってきたとかその辺の挙動？っぽいのでここにしておく(動作未確認)
-        case QUICHE_H3_ERR_FRAME_ERROR:             // (動作未確認)
-            return nowStatus;
+            // Transport 層のエラー
+            // 内部的に通信続行で直りそうなもの
+            case QUICHE_H3_TRANSPORT_ERR_DONE:
+            case QUICHE_H3_TRANSPORT_ERR_FLOW_CONTROL:
+            case QUICHE_H3_TRANSPORT_ERR_FINAL_SIZE:
+            case QUICHE_H3_TRANSPORT_ERR_CONGESTION_CONTROL:
+                return nowStatus;
 
-        // リトライで直りそうなもの
-        case QUICHE_H3_ERR_CLOSED_CRITICAL_STREAM:  // (動作未確認)
-            return QwfsStatus::Error;   // 適当なステータスを返して Connection 側でリトライしてもらう
+            // リトライで直りそうなもの
+            case QUICHE_H3_TRANSPORT_ERR_STREAM_RESET:
+                return QwfsStatus::Error;   // 適当なステータスを返して Connection 側でリトライしてもらう
 
             // こちらの実装ミスで発生するもの
-        case QUICHE_H3_ERR_BUFFER_TOO_SHORT:    // (動作未確認)
-        case QUICHE_H3_ERR_ID_ERROR:            // ストリーム ID が使いまわされたり、上限や下限を超えると発生
-            assert(false);
-            return QwfsStatus::CriticalError;
+            case QUICHE_H3_TRANSPORT_ERR_BUFFER_TOO_SHORT:
+            case QUICHE_H3_TRANSPORT_ERR_STREAM_LIMIT:
+                return QwfsStatus::CriticalError;
+
+            // 証明書の設定で発生する TLS 関連のエラー
+            case QUICHE_H3_TRANSPORT_ERR_TLS_FAIL:
+                // ソケットクローズからやり直す必要がある
+                return QwfsStatus::ErrorTlsInvalidCert;
+
+            // 証明書の設定以外の TLS 関連のエラー
+            case QUICHE_H3_TRANSPORT_ERR_CRYPTO_FAIL:
+                return QwfsStatus::ErrorTls;
 
             // サーバからのデータがおかしい等の内部エラーっぽいもの。サーバの問題なので繋ぎ直してもダメ
-        case QUICHE_H3_ERR_STREAM_CREATION_ERROR:       // (動作未確認)
-        case QUICHE_H3_ERR_MISSING_SETTINGS:            // (動作未確認)
-        case QUICHE_H3_ERR_QPACK_DECOMPRESSION_FAILED:  // (動作未確認)
-            return QwfsStatus::ErrorInvalidResponse;
+            case QUICHE_H3_TRANSPORT_ERR_UNKNOWN_VERSION:
+            case QUICHE_H3_TRANSPORT_ERR_INVALID_FRAME:
+            case QUICHE_H3_TRANSPORT_ERR_INVALID_PACKET:
+            case QUICHE_H3_TRANSPORT_ERR_INVALID_STATE:
+            case QUICHE_H3_TRANSPORT_ERR_INVALID_STREAM_STATE:
+            case QUICHE_H3_TRANSPORT_ERR_INVALID_TRANSPORT_PARAM:
+                return QwfsStatus::ErrorInvalidServer;
 
-        case QUICHE_H3_ERR_INTERNAL_ERROR:
-        default:
-            return QwfsStatus::CriticalErrorQuiche;
+
+            // HTTP/3 層のエラー
+
+            // 内部的に通信続行で直りそうなもの
+            case QUICHE_H3_ERR_DONE:
+            case QUICHE_H3_ERR_EXCESSIVE_LOAD:          // 過負荷による輻輳制御発生時に起きるっぽいのでここにしておく
+            case QUICHE_H3_ERR_STREAM_BLOCKED:          // QUIC 内に余裕ができればリトライで直るっぽいのでここにしておく
+            case QUICHE_H3_ERR_FRAME_UNEXPECTED:        // サーバ側が間違ったフレームを送ってきたとかその辺の挙動？っぽいのでここにしておく
+            case QUICHE_H3_ERR_FRAME_ERROR:
+            case QUICHE_H3_ERR_REQUEST_INCOMPLETE:
+                return nowStatus;
+
+            // リトライで直りそうなもの
+            case QUICHE_H3_ERR_CLOSED_CRITICAL_STREAM:
+            case QUICHE_H3_ERR_REQUEST_REJECTED:        // 理由次第ではリトライで復帰しないが基本的にはサーバの状況が改善すれば直る見込み
+            case QUICHE_H3_ERR_REQUEST_CANCELLED:       // 同上
+            case QUICHE_H3_ERR_CONNECT_ERROR:           // コネクションのリセットもしくはクローズが発生
+                return QwfsStatus::Error;   // 適当なステータスを返して Connection 側でリトライしてもらう
+
+            // こちらの実装ミスで発生するもの
+            case QUICHE_H3_ERR_BUFFER_TOO_SHORT:
+            case QUICHE_H3_ERR_ID_ERROR:            // ストリーム ID が使いまわされたり、上限や下限を超えると発生
+            case QUICHE_H3_ERR_SETTINGS_ERROR:      // セッティングフレームの内容が不正な場合に発生
+            case QUICHE_H3_ERR_MESSAGE_ERROR:       // HTTP メッセージの不正
+                assert(false);
+                return QwfsStatus::CriticalError;
+
+            // サーバからのデータがおかしい等の内部エラーっぽいもの。サーバの問題なので繋ぎ直してもダメ
+            case QUICHE_H3_ERR_STREAM_CREATION_ERROR:
+            case QUICHE_H3_ERR_MISSING_SETTINGS:
+            case QUICHE_H3_ERR_QPACK_DECOMPRESSION_FAILED:
+                return QwfsStatus::ErrorInvalidResponse;
+
+            // HTTP/3 で接続できず HTTP/1.1 経由で再接続する必要がある
+            case QUICHE_H3_ERR_VERSION_FALLBACK:
+                return QwfsStatus::ErrorVersionFallback;
+
+            case QUICHE_H3_ERR_INTERNAL_ERROR:
+            default:
+                return QwfsStatus::CriticalErrorQuiche;
         }
     }
 }
