@@ -53,6 +53,7 @@ quiche の .lib/.dll ビルド方法は以下を参照してください。
 [Re: C#(Unity)でHTTP/3通信してみる その壱 ～OSSの選定からビルドまで～](https://qiita.com/takehara-ryo/items/1f3e19b54bd6fffcba77)
 ちなみに、 quiche 側で対応が入った為、 BoringSSL の個別ビルドは不要になりました。
 最新版の cmake, nasm をインストールして、パスを通せばそのまま quiche のビルドが成功します。
+ビルド時のコマンドは ``cargo build --features ffi --release`` を使用してください。
 qwfs からはデフォルトの quiche のビルドパスを参照するので、ビルドを行った後の設定は不要です。
 
 

@@ -87,8 +87,8 @@
       <AdditionalLibraryDirectories>$(SolutionDir)..\External\quiche\target\debug</AdditionalLibraryDirectories>
     </Link>
     <PostBuildEvent>
-      <Command>xcopy /Y $(SolutionDir)$(Platform)\$(Configuration)\qwfs.dll $(SolutionDir)..\nhh3\Assets\nhh3\Plugins\Windows\
-xcopy /Y $(SolutionDir)..\External\quiche\target\$(Configuration)\quiche.dll $(SolutionDir)..\nhh3\Assets\nhh3\Plugins\Windows\
+      <Command>xcopy /Y $(SolutionDir)$(Platform)\$(Configuration)\qwfs.dll $(SolutionDir)..\unity\Assets\nhh3\Plugins\Windows\
+xcopy /Y $(SolutionDir)..\External\quiche\target\$(Configuration)\quiche.dll $(SolutionDir)..\unity\Assets\nhh3\Plugins\Windows\
 xcopy /Y $(SolutionDir)$(Platform)\$(Configuration)\qwfs.dll $(SolutionDir)qwfsSample\$(Platform)\$(Configuration)\
 xcopy /Y $(SolutionDir)..\External\quiche\target\$(Configuration)\quiche.dll $(SolutionDir)qwfsSample\$(Platform)\$(Configuration)\</Command>
     </PostBuildEvent>
@@ -118,8 +118,8 @@ xcopy /Y $(SolutionDir)..\External\quiche\target\$(Configuration)\quiche.dll $(S
       <AdditionalLibraryDirectories>$(SolutionDir)..\External\quiche\target\release</AdditionalLibraryDirectories>
     </Link>
     <PostBuildEvent>
-      <Command>xcopy /Y $(SolutionDir)$(Platform)\$(Configuration)\qwfs.dll $(SolutionDir)..\nhh3\Assets\nhh3\Plugins\Windows\
-xcopy /Y $(SolutionDir)..\External\quiche\target\$(Configuration)\quiche.dll $(SolutionDir)..\nhh3\Assets\nhh3\Plugins\Windows\
+      <Command>xcopy /Y $(SolutionDir)$(Platform)\$(Configuration)\qwfs.dll $(SolutionDir)..\unity\Assets\nhh3\Plugins\Windows\
+xcopy /Y $(SolutionDir)..\External\quiche\target\$(Configuration)\quiche.dll $(SolutionDir)..\unity\Assets\nhh3\Plugins\Windows\
 xcopy /Y $(SolutionDir)$(Platform)\$(Configuration)\qwfs.dll $(SolutionDir)qwfsSample\$(Platform)\$(Configuration)\
 xcopy /Y $(SolutionDir)..\External\quiche\target\$(Configuration)\quiche.dll $(SolutionDir)qwfsSample\$(Platform)\$(Configuration)\</Command>
     </PostBuildEvent>
