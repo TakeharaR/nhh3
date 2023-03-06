@@ -133,3 +133,4 @@ Windows 環境のみでビルド可能な bat を用意してあります。<br>
 
 # License
 Copyright(C) Ryo Takehara
+See [LICENSE](https://github.com/TakeharaR/nhh3/blob/master/LICENSE) for more infomation.
