@@ -738,7 +738,7 @@ MonoBehaviour:
   VerifyPeer: 0
   Port: 443
   HostName: cloudflare-quic.com
-  Path: 
+  UriPath: 
   SaveFilePath: 
   QlogPath: 
   manager: {fileID: 1818178146}
@@ -746,7 +746,7 @@ MonoBehaviour:
   DownloadProgressBar: {fileID: 8382759}
   DownloadFileNum: 128
   MaxMultipleDownloadNum: 512
-  WorkDir: C:\tmp
+  WorkDir: 
 --- !u!4 &662852807
 Transform:
   m_ObjectHideFlags: 0

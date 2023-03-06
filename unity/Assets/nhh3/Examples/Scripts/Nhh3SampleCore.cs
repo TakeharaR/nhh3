@@ -1,7 +1,9 @@
 ﻿using AOT;
 using System.Collections.Generic;
+using System.IO;
 using System.Text;
 using UnityEngine;
+using UnityEngine.Networking;
 using UnityEngine.UI;
 
 public class Nhh3SampleCore : MonoBehaviour
@@ -38,7 +40,7 @@ public class Nhh3SampleCore : MonoBehaviour
     protected string HostName = "localhost";
 
     [SerializeField]
-    protected string Path = "";      // URI の Path の指定
+    protected string UriPath = "";      // URI の Path の指定
 
     [SerializeField]
     protected string SaveFilePath = string.Empty;   // ファイル保存したい場合はフルパスを指定
@@ -136,10 +138,30 @@ public class Nhh3SampleCore : MonoBehaviour
     {
         if (null == Http3)
         {
+#if UNITY_ANDROID
+            // Android は信頼された CA リストを明示的に与える必要がある
+            // このサンプルでは StreamingAssets に配置してある Firefox の 2023-01-10 ※ を使用している
+            // ※ https://curl.se/docs/caextract.html
+            // quiche がファイルパスを要求するので Application.temporaryCachePath に一度ファイル出力してあげる
+            var caPath = Path.Combine(Application.streamingAssetsPath, "cacert.pem");
+            var createCaPath = Path.Combine(Application.temporaryCachePath, "cacert.pem");
+            using (var uwr = UnityWebRequest.Get(caPath))
+            {
+                uwr.SendWebRequest();
+                while (!uwr.isDone)
+                {
+                    System.Threading.Thread.Sleep(100);
+                }
+            }
+#endif
+
             Http3 = new Nhh3(HostName, Port, new Nhh3.ConnectionOptions
             {
                 VerifyPeer = VerifyPeer,
                 QlogPath = QlogPath,
+#if UNITY_ANDROID
+                CaCertsList = createCaPath,
+#endif
                 MaxConcurrentStreams = maxMulitipleNum,
                 Quic = new Nhh3.QuicOptions
                 {

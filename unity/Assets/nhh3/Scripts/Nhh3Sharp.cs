@@ -1,5 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Runtime.InteropServices;
 
 public class Nhh3
@@ -147,15 +146,19 @@ public class Nhh3
 
         /// <summary>
         ///     HTTP/3 パラメータ "SETTINGS_QPACK_MAX_TABLE_CAPACITY" (QPACK の動的テーブルの最大値) の設定.
-        ///     ※こちらは 0 設定時の挙動は未確認です(0 でも通信は可能な所まで確認).
         /// </summary>
-        public ulong QpackMaxTableCapacity { get; set; } = 0;
+        public ulong QpackMaxTableCapacity { get; set; } = 1024;
 
         /// <summary>
         ///     HTTP/3 パラメータ "SETTINGS_QPACK_BLOCKED_STREAMS" (ブロックされる可能性のあるストリーム数) の設定.
-        ///     ※こちらは 0 設定時の挙動は未確認です(0 でも通信は可能な所まで確認).
         /// </summary>
-        public ulong QpackBlockedStreams { get; set; } = 0;
+        public ulong QpackBlockedStreams { get; set; } = 512;
+
+        /// <summary>
+        /// CONNECT プロトコルを使用するかどうか.
+        /// 現状 HTTP/3 にのみ対応しているので、基本的には false を指定して変更しないでください.
+        /// </summary>
+        public bool SettingsEnableConnectProtocol { get; set; } = false;
     }
 
     /// <summary>
@@ -242,8 +245,15 @@ public class Nhh3
         public bool VerifyPeer = true;
 
         /// <summary>
+        ///     quiche のログ出力を行うかどうか.
+        ///     出力先は DebugLogCallback です(この為 DebugLogCallback の指定がないと出力されません).
+        /// </summary>
+        [MarshalAs(UnmanagedType.I1)]
+        public bool EnableQuicheLog = false;
+
+        /// <summary>
         ///     信頼された証明書リスト(証明書ストア) をファイルから設定する際のパス.
-        ///     現在この値は使用できません (quiche が対応次第利用可能になる予定).
+        ///     .pem 形式のファイルのパスを指定してください.
         /// </summary>
         [MarshalAs(UnmanagedType.LPStr)]
         public string CaCertsList = string.Empty;

@@ -100,7 +100,7 @@ struct QwfsQuicOptions
     uint64_t    _activeConnectionIdLimit;
 
     QwfsQuicOptions() : 
-        _disableActiveMigration(false)
+          _disableActiveMigration(false)
         , _enableEarlyData(true)
         , _ccType(QwfsCcType::Cubic)
         , _maxUdpPayloadSize(MAX_DATAGRAM_SIZE)
@@ -128,13 +128,14 @@ struct QwfsRequestHeaders
 struct QwfsOptions
 {
     bool            _verifyPeer;
+    bool            _enableQuicheLog;
     const char*     _caCertsList;
     const char*     _qlogPath;
     uint64_t        _maxConcurrentStreams;
     QwfsH3Options   _h3Oprtions;
     QwfsQuicOptions _quicOprtions;
 
-    QwfsOptions() : _verifyPeer(true), _caCertsList(nullptr), _qlogPath(nullptr) {};
+    QwfsOptions() : _verifyPeer(true), _enableQuicheLog(false), _caCertsList(nullptr), _qlogPath(nullptr), _maxConcurrentStreams(128) {};
 };
 
 typedef void(*SuccessFileCallback)(QwfsId hostId, uint64_t responseCode, const char** headers, uint64_t headersSize, const char* filePath);

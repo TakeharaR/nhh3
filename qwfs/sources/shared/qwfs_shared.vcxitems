@@ -1,0 +1,32 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup Label="Globals">
+    <MSBuildAllProjects Condition="'$(MSBuildVersion)' == '' Or '$(MSBuildVersion)' &lt; '16.0'">$(MSBuildAllProjects);$(MSBuildThisFileFullPath)</MSBuildAllProjects>
+    <HasSharedItems>true</HasSharedItems>
+    <ItemsProjectGuid>{72675371-d0aa-42c0-a46d-1a526580943b}</ItemsProjectGuid>
+  </PropertyGroup>
+  <ItemDefinitionGroup>
+    <ClCompile>
+      <AdditionalIncludeDirectories>%(AdditionalIncludeDirectories);$(MSBuildThisFileDirectory)</AdditionalIncludeDirectories>
+    </ClCompile>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <ProjectCapability Include="SourceItemsFromImports" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="$(MSBuildThisFileDirectory)qwfs.cpp" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)qwfs_connection.cpp" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)qwfs_connection_manager.cpp" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)qwfs_h3_stream.cpp" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)qwfs_quich_wrapper.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="$(MSBuildThisFileDirectory)..\..\include\qwfs.h" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)..\..\include\qwfs_types.h" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)qwfs_connection.h" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)qwfs_connection_manager.h" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)qwfs_error.h" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)qwfs_h3_stream.h" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)qwfs_quich_wrapper.h" />
+  </ItemGroup>
+</Project>

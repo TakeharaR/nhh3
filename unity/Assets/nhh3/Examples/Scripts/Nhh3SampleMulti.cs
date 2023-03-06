@@ -29,11 +29,12 @@ public class Nhh3SampleMulti : Nhh3SampleCore
     private ulong MaxMultipleDownloadNum = 512;
 
     /// <summary>
-    ///     ファイルを保存するディレクトリ.
+    ///     ファイルを保存するディレクトリ(Windows 時限定).
     ///     この下に連番でファイルが作られます.
+    ///     Android 使用時は Application.temporaryCachePath}\\save に保存されます.
     /// </summary>
     [SerializeField]
-    private string WorkDir = @"F:\tmp";
+    private string WorkDir = "";
 
 
     private ulong _completedDownloadFileNum = 0;
@@ -48,10 +49,16 @@ public class Nhh3SampleMulti : Nhh3SampleCore
         for (ulong num = 0; num < DownloadFileNum; ++num)
         {
             var fileSize = (ulong)new System.Random().Next(1, 1000) * 1024;
+#if UNITY_EDITOR_WIN || UNITY_STANDALONE_WIN
+            var saveFilePath = $"{WorkDir}\\{num}";
+#else
+            // Android
+            var saveFilePath = $"{Application.temporaryCachePath}\\save\\{num}";
+#endif
             TotalDownloadSize += fileSize;
             list.Add(new Nhh3.RequestParamaters
             {
-                SaveFilePath = $"{WorkDir}\\{num}",
+                SaveFilePath = saveFilePath,
                 Path = $"{fileSize}",
             });
         };

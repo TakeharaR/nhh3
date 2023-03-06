@@ -13,7 +13,7 @@ public class Nhh3SampleSingle : Nhh3SampleCore
         {
             new Nhh3.RequestParamaters
             {
-                Path = Path,
+                Path = UriPath,
                 SaveFilePath = SaveFilePath,
                 Headers = new Nhh3.Headers[4]
                 {
