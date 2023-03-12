@@ -111,7 +111,10 @@ nhh3 は Unity で HTTP/3 の通信を行う実験的な実装です。<br>
         - apk からの展開と再配置については Nhh3SampleCore.cs - CreateHttp3() 内の実装を参考にしてください
     - MultiRequestSample のファイル保存パスは ``Application.temporaryCachePath}\save`` に固定です
         - 変更したい場合は Nhh3SampleMulti.cs - OnStartClick() の実装を修正してください
-
+- 共通
+    - コネクション自体がエラーになった場合にはリトライ、アボートボタンで復旧できません。アプリを再起動してください
+    - Windows で cloudflare-quic.com に接続する際には多重化が効かないようです
+        - Windows で多重化の確認をしたい場合は www.facebook.com 等別のサイトで試してみてください
 
 # qwfs
 

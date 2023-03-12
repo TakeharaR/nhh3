@@ -113,7 +113,7 @@ public class Nhh3
     ///     see : QuicOptions.InitialMaxDataSize
     ///     この値を利用するかは実際に利用するサーバ、経路やプロジェクトの都合に合わせて決定してください.
     /// </summary>
-    public const ulong DefaultInitialMaxDataSize = 100 * 1024 * 1024;    // とりあえず 1MB
+    public const ulong DefaultInitialMaxDataSize = 100 * 1024 * 1024;
 
     /// <summary>
     ///     see : QuicOptions.InitialMaxStreamsBidi, QuicOptions.InitialMaxStreamsUni
