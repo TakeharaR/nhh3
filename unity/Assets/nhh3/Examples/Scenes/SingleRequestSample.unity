@@ -424,6 +424,26 @@ PrefabInstance:
       propertyPath: m_Name
       value: CommonUI
       objectReference: {fileID: 0}
+    - target: {fileID: 8058527061243219647, guid: 0f9c20c3296a033418e97264651dadda,
+        type: 3}
+      propertyPath: m_UiScaleMode
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8058527061243219647, guid: 0f9c20c3296a033418e97264651dadda,
+        type: 3}
+      propertyPath: m_ScreenMatchMode
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8058527061243219647, guid: 0f9c20c3296a033418e97264651dadda,
+        type: 3}
+      propertyPath: m_ReferenceResolution.x
+      value: 1280
+      objectReference: {fileID: 0}
+    - target: {fileID: 8058527061243219647, guid: 0f9c20c3296a033418e97264651dadda,
+        type: 3}
+      propertyPath: m_ReferenceResolution.y
+      value: 720
+      objectReference: {fileID: 0}
     - target: {fileID: 8058527062063558384, guid: 0f9c20c3296a033418e97264651dadda,
         type: 3}
       propertyPath: m_Text
@@ -576,11 +596,15 @@ MonoBehaviour:
   Body: {fileID: 1249672159}
   ErrorDetail: {fileID: 375282201}
   VerifyPeer: 1
+  EnableConnectionMigration: 0
+  EnableEarlyData: 0
   Port: 443
   HostName: cloudflare-quic.com
-  Path: 
+  UriPath: 
   SaveFilePath: 
-  QlogPath: G:\tmp
+  QlogPath: 
+  WorkPath: 
+  MaxMultipleDownloadNum: 128
   manager: {fileID: 1818178146}
 --- !u!4 &662852807
 Transform:

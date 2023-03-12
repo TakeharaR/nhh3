@@ -25,6 +25,7 @@ extern "C" {
     DllExport QwfsResult qwfsGetProgress(QwfsId hostId, uint64_t* progress, uint64_t* totalWriteSize);
     DllExport QwfsResult qwfsRetry(QwfsId hostId);
     DllExport QwfsResult qwfsAbort(QwfsId hostId);
+    DllExport QwfsResult qwfsReconnect(QwfsId hostId);
     DllExport const char* qwfsGetErrorDetail(QwfsId hostId);
     DllExport QwfsResult qwfsSetDebugOutput(DebugOutputCallback debugOutput);
 #ifdef __cplusplus

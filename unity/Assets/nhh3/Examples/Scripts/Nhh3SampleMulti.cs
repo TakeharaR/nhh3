@@ -21,38 +21,24 @@ public class Nhh3SampleMulti : Nhh3SampleCore
     [SerializeField]
     private ulong DownloadFileNum = 128;
 
-    /// <summary>
-    ///     同時並行でダウンロードするファイルの上限数.
-    ///     ファイル I/O 等で詰まるのであまり大きな値にしても逆にパフォーマンス下がります.
-    /// </summary>
-    [SerializeField]
-    private ulong MaxMultipleDownloadNum = 512;
-
-    /// <summary>
-    ///     ファイルを保存するディレクトリ.
-    ///     この下に連番でファイルが作られます.
-    /// </summary>
-    [SerializeField]
-    private string WorkDir = @"F:\tmp";
-
-
     private ulong _completedDownloadFileNum = 0;
 
     public void OnStartClick()
     {
-        CreateHttp3(MaxMultipleDownloadNum);
-
-        // 1k-10M のデータを DownloadFileNum 個ダウンロードする
-        TotalDownloadSize = 0;
         var list = new List<Nhh3.RequestParamaters>();
         for (ulong num = 0; num < DownloadFileNum; ++num)
         {
-            var fileSize = (ulong)new System.Random().Next(1, 1000) * 1024;
-            TotalDownloadSize += fileSize;
+            // 保存パス
+#if UNITY_EDITOR_WIN || UNITY_STANDALONE_WIN
+            var saveFilePath = $"{WorkPath}\\{num}";
+#else
+            // Android
+            var saveFilePath = $"{Application.temporaryCachePath}\\{num}";
+#endif
             list.Add(new Nhh3.RequestParamaters
             {
-                SaveFilePath = $"{WorkDir}\\{num}",
-                Path = $"{fileSize}",
+                //SaveFilePath = saveFilePath,
+                Path = UriPath,
             });
         };
         Http3.PublishRequest(list);
@@ -63,6 +49,7 @@ public class Nhh3SampleMulti : Nhh3SampleCore
 
     private void Update()
     {
+        CheckNetworkReachability();
         var resList = Http3Update();
         _completedDownloadFileNum += (ulong)resList.Count;
         CompletedDownloadFileNum.text = $"{_completedDownloadFileNum}/{DownloadFileNum} FILE";

@@ -6,7 +6,6 @@ using System.IO;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
-using UnityEngine.Assertions.Must;
 
 public class Nhh3Impl
 {
@@ -85,6 +84,7 @@ public class Nhh3Impl
 
     private int _requestRetry = 0;
     private int _requestAbort = 0;
+    private int _requestRecconect = 0;
 
     private Task                    _task;
     private CancellationTokenSource _cToken;
@@ -111,12 +111,18 @@ public class Nhh3Impl
         }
 
         // そのうち単独呼び出しにするかも
-        
         if (!string.IsNullOrWhiteSpace(options.QlogPath))
         {
             if (!Directory.Exists(options.QlogPath))
             {
                 Directory.CreateDirectory(options.QlogPath);
+            }
+        }
+        if (!string.IsNullOrWhiteSpace(options.WorkPath))
+        {
+            if (!Directory.Exists(options.WorkPath))
+            {
+                Directory.CreateDirectory(options.WorkPath);
             }
         }
         var result = qwfsSetOptions(_hostId, options);
@@ -209,6 +215,11 @@ public class Nhh3Impl
         Interlocked.Exchange(ref _requestAbort, 1);
     }
 
+    public void Reconnect()
+    {
+        Interlocked.Exchange(ref _requestRecconect, 1);
+    }
+
     public string GetErrorDetail()
     {
         IntPtr ptr;
@@ -225,7 +236,6 @@ public class Nhh3Impl
         return message;
     }
     #endregion
-
 
     private static void ReadResponseHeaders(IntPtr headers, ulong headersSize, ref Nhh3.ResponseParamaters res)
     {
@@ -332,6 +342,14 @@ public class Nhh3Impl
                     }
                     Debug.Assert(QwfsResult.Ok == result);
                 }
+                if (1 == Interlocked.Exchange(ref _requestRecconect, 0))
+                {
+                    lock (_lockObject)
+                    {
+                        result = qwfsReconnect(_hostId);
+                    }
+                    Debug.Assert(QwfsResult.Ok == result);
+                }
 
                 lock (_lockObject)
                 {
@@ -397,6 +415,9 @@ public class Nhh3Impl
 
     [DllImport(PluginName)]
     private static extern QwfsResult qwfsAbort(ulong hostId);
+
+    [DllImport(PluginName)]
+    private static extern QwfsResult qwfsReconnect(ulong hostId);
 
     [DllImport(PluginName)]
     private static extern IntPtr qwfsGetErrorDetail(ulong hostId);

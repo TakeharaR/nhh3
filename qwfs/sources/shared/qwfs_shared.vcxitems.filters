@@ -1,0 +1,28 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="include">
+      <UniqueIdentifier>{3e170eea-b825-4433-a5e5-3b65f60685ff}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="$(MSBuildThisFileDirectory)qwfs_connection.cpp" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)qwfs_connection_manager.cpp" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)qwfs_h3_stream.cpp" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)qwfs_quich_wrapper.cpp" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)qwfs.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="$(MSBuildThisFileDirectory)qwfs_connection.h" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)qwfs_connection_manager.h" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)qwfs_error.h" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)qwfs_h3_stream.h" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)qwfs_quich_wrapper.h" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)..\..\include\qwfs_types.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="$(MSBuildThisFileDirectory)..\..\include\qwfs.h">
+      <Filter>include</Filter>
+    </ClInclude>
+  </ItemGroup>
+</Project>
