@@ -17,6 +17,8 @@ namespace qwfs
     QwfsResult GetProgress(QwfsId hostId, uint64_t* progress, uint64_t* totalWriteSize);
     QwfsResult Retry(QwfsId hostId);
     QwfsResult Abort(QwfsId hostId);
+    QwfsResult Reconnect(QwfsId hostId);
     const char* GetErrorDetail(QwfsId hostId);
     QwfsResult SetDebugOutput(DebugOutputCallback debugOutput);
+
 }

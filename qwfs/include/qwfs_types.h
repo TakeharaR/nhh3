@@ -3,7 +3,7 @@
 
 const uint64_t INVALID_QWFS_ID          = UINT64_MAX;
 const uint64_t MAX_DATAGRAM_SIZE        = 65527U;
-const uint64_t INITIAL_MAX_DATA_SIZE    = 1024U * 1024U;    // とりあえず 1MB
+const uint64_t INITIAL_MAX_DATA_SIZE    = 1U * 1024U * 1024U;    // とりあえず 1MB
 
 typedef uint64_t QwfsId;
 
@@ -44,6 +44,7 @@ enum class QwfsStatus
     ErrorTls                = -9,     // TLS に失敗(証明書以外の理由)
     ErrorNetwork            = -10,
     ErrorVersionFallback    = -11,    // HTTP/3 で接続できず HTTP/1.1 経由で再接続する必要がある
+    ErrorConnectionMigration= -12,    // Connection Migration を試みたが条件を満たさなかった
     ErrorFileIO             = -30,
 
     // 正常な状態
@@ -57,6 +58,7 @@ enum class QwfsCcType
 {
     NewReno,
     Cubic,
+    Bbr,
 };
 
 enum QWFS_REQUEST_TYPE
@@ -78,7 +80,7 @@ struct QwfsH3Options
     uint64_t _qpackBlockedStreams;
     bool     _settingsEnableConnectProtocol;
 
-    QwfsH3Options() : _maxHeaderListSize(1024U), _qpackMaxTableCapacity(1024U), _qpackBlockedStreams(512U), _settingsEnableConnectProtocol(false) {};
+    QwfsH3Options() : _maxHeaderListSize(10U * 1024U), _qpackMaxTableCapacity(0U), _qpackBlockedStreams(10U * 1024U), _settingsEnableConnectProtocol(false) {};
 };
 
 // BOOL で受けた方がメモリレイアウト的には良いかも
@@ -100,20 +102,20 @@ struct QwfsQuicOptions
     uint64_t    _activeConnectionIdLimit;
 
     QwfsQuicOptions() : 
-          _disableActiveMigration(false)
-        , _enableEarlyData(true)
-        , _ccType(QwfsCcType::Cubic)
+          _disableActiveMigration(true)
+        , _enableEarlyData(false)
+        , _ccType(QwfsCcType::Bbr)
         , _maxUdpPayloadSize(MAX_DATAGRAM_SIZE)
-        , _maxIdleTimeout(10000U)
+        , _maxIdleTimeout(10U * 1000U)
         , _initialMaxData(INITIAL_MAX_DATA_SIZE)
         , _initialMaxStreamDataBidiLocal(INITIAL_MAX_DATA_SIZE)
         , _initialMaxStreamDataBidiRemote(INITIAL_MAX_DATA_SIZE)
         , _initialMaxStreamDataUni(INITIAL_MAX_DATA_SIZE)
         , _initialMaxStreamsBidi(128U)
         , _initialMaxStreamsUni(128U)
-        , _maxConnectionWindowSize(25165824U)       // from quiche /src/args.rs
-        , _maxStreamWindowSize(16777216U)           // from quiche /src/args.rs
-        , _activeConnectionIdLimit(2U)              // from quiche /src/args.rs
+        , _maxConnectionWindowSize(24U * 1024U * 1024U)       // from quiche /src/args.rs
+        , _maxStreamWindowSize(16U * 1024U * 1024U)           // from quiche /src/args.rs
+        , _activeConnectionIdLimit(16U)
     {};
 };
 
@@ -131,11 +133,12 @@ struct QwfsOptions
     bool            _enableQuicheLog;
     const char*     _caCertsList;
     const char*     _qlogPath;
+    const char*     _workPath;
     uint64_t        _maxConcurrentStreams;
     QwfsH3Options   _h3Oprtions;
     QwfsQuicOptions _quicOprtions;
 
-    QwfsOptions() : _verifyPeer(true), _enableQuicheLog(false), _caCertsList(nullptr), _qlogPath(nullptr), _maxConcurrentStreams(128) {};
+    QwfsOptions() : _verifyPeer(true), _enableQuicheLog(true), _caCertsList(nullptr), _qlogPath(nullptr), _workPath(nullptr), _maxConcurrentStreams(128) {};
 };
 
 typedef void(*SuccessFileCallback)(QwfsId hostId, uint64_t responseCode, const char** headers, uint64_t headersSize, const char* filePath);

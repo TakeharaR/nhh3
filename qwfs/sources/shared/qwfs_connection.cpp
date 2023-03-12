@@ -10,14 +10,14 @@
 
 namespace qwfs
 {
-    static DebugOutputCallback _staticDebugOutput = nullptr;
-
-    // 
-    static int ForEachSettingCallback(uint64_t , uint64_t , void* )
+    // 暫定
+    static int ForEachSettingCallback(uint64_t, uint64_t, void*)
     {
         return 0;
     }
 
+    // for debug
+    static DebugOutputCallback _staticDebugOutput = nullptr;
     static void QuicheDebugLogCallback(const char* line, void*)
     {
         if (nullptr != _staticDebugOutput)
@@ -35,6 +35,7 @@ namespace qwfs
         , _sock(QWFS_INVALID_SOCKET)
         , _peerAddInfo(nullptr)
         , _localAddInfo(nullptr)
+        , _localAddrLen(0)
         , _callbacks(callbacks)
         , _debugOutput(debugOutput)
         , _quicheConfig(nullptr)
@@ -43,13 +44,17 @@ namespace qwfs
         , _quicheH3Connection(nullptr)
         , _callRetry(false)
         , _callAbort(false)
+        , _isLoadedSessionForZeroRtt(false)
         , _settingsReceived(false)
         , _totalWriteSize(0U)
         , _updateFunc(nullptr)
     {
+        // 一度切りの初期化で良いもの
         _staticDebugOutput = _debugOutput;
-
         socketwrapper::PlatformInitialize();
+
+        // リトライの度に初期化が必要なもの
+        ClearForRetry();
 
         if (nullptr != _debugOutput)
         {
@@ -73,10 +78,7 @@ namespace qwfs
         _h3Streams.clear();
         _h3StreamsMap.clear();
 
-        if (QWFS_INVALID_SOCKET != _sock)
-        {
-            socketwrapper::Close(_sock);
-        }
+        CloseUdpSocket();
 
         _localAddInfo = nullptr;
         if (nullptr != _peerAddInfo)
@@ -85,7 +87,7 @@ namespace qwfs
             _peerAddInfo = nullptr;
         }
 
-        ClearQuicheConnection(this);
+        ClearQuicheConnection();
 
         // todo : 終了処理待ち
 
@@ -116,13 +118,32 @@ namespace qwfs
         _options = options;
 
         // 暫定 : メモリ解放されないように文字列はコピーしておく
-        if (nullptr != options._caCertsList)
+        if ((nullptr != options._caCertsList) && (strcmp(options._caCertsList, "") != 0))
         {
             _caCertsList = options._caCertsList;
         }
-        if (nullptr != options._qlogPath)
+        else
+        {
+            _caCertsList.clear();
+        }
+        if ((nullptr != options._qlogPath) && (strcmp(options._qlogPath, "") != 0))
         {
             _qlogPath = options._qlogPath;
+        }
+        else
+        {
+            _qlogPath.clear();
+        }
+        if ((nullptr != options._workPath) && (strcmp(options._workPath, "") != 0))
+        {
+            // todo : 専用のディレクトリを掘る
+            std::stringstream ss;
+            ss << options._workPath << "/0rtt_" << _hostName << "_" << _port << ".session";
+            _zeroRttSessionPath = ss.str();
+        }
+        else
+        {
+            _zeroRttSessionPath.clear();
         }
 
         return QwfsResult::Ok;
@@ -153,11 +174,25 @@ namespace qwfs
         // 送受信は必ず呼ぶ (ソケットが無効の際は内部で何もしない)
         if (QwfsResult::Ok != Send())
         {
-            return QwfsResult::Ok;
+            if (IsEnabledConnectionMigration())
+            {
+                return TransitionConnectionMigration();
+            }
+            else
+            {
+                return ConvertStatusToResult(_status);
+            }
         }
         if (QwfsResult::Ok != Receive())
         {
-            return QwfsResult::Ok;
+            if (IsEnabledConnectionMigration())
+            {
+                return TransitionConnectionMigration();
+            }
+            else
+            {
+                return ConvertStatusToResult(_status);
+            }
         }
 
         if (nullptr == _updateFunc)
@@ -195,6 +230,7 @@ namespace qwfs
             if (QwfsStatus::Completed == status)
             {
                 stream->CallSuccessCallback(_id);
+                _h3StreamsMap.erase(stream->GetStreamId());
                 return true;
             }
             else if (QwfsStatus::Wait > status)
@@ -234,19 +270,29 @@ namespace qwfs
         }
     }
 
-    void Connection::ClearQuicheConnection(Connection* connection) const
+    void Connection::ClearQuicheConnection()
     {
-        if (nullptr != connection->_quicheH3Connection)
+        if (nullptr != _quicheH3Connection)
         {
-            quiche_h3_conn_free(connection->_quicheH3Connection);
-            connection->_quicheH3Connection = nullptr;
+            quiche_h3_conn_free(_quicheH3Connection);
+            _quicheH3Connection = nullptr;
         }
 
-        if (nullptr != connection->_quicheConnection)
+        if (nullptr != _quicheConnection)
         {
-            quiche_conn_free(connection->_quicheConnection);
-            connection->_quicheConnection = nullptr;
+            quiche_conn_free(_quicheConnection);
+            _quicheConnection = nullptr;
         }
+    }
+
+    void Connection::ClearForRetry()
+    {
+        CloseUdpSocket();
+        ClearQuicheConnection();
+        _status = QwfsStatus::Wait;
+        _isLoadedSessionForZeroRtt = false;
+        _settingsReceived = false;
+        _totalWriteSize = 0U;
     }
 
     QwfsResult Connection::SetOptionsInternal()
@@ -278,6 +324,9 @@ namespace qwfs
             return nullptr;
         }
 
+        // ステートレスリセット用トークンの設定。
+        quiche_config_set_stateless_reset_token(config, CreateToken().data());
+
         // quiche ログ出力設定
         if (options._enableQuicheLog)
         {
@@ -307,7 +356,6 @@ namespace qwfs
         quiche_config_set_cc_algorithm(config, static_cast<quiche_cc_algorithm>(options._quicOprtions._ccType));
 
         quiche_config_set_max_idle_timeout(config, options._quicOprtions._maxIdleTimeout);                                      // max_idle_timeout の設定(ミリ秒)。 0 を指定する事でタイムアウトが無制限になる
-        quiche_config_set_max_recv_udp_payload_size(config, options._quicOprtions._maxUdpPayloadSize);                          // max_udp_payload_size (受信時)の設定。 PMTU の実装を鑑みて設定を行うこと(「14. Packet Size」参照)
         quiche_config_set_max_send_udp_payload_size(config, options._quicOprtions._maxUdpPayloadSize);                          // max_udp_payload_size (送信時)の設定。 PMTU の実装を鑑みて設定を行うこと(「14. Packet Size」参照)
         quiche_config_set_initial_max_data(config, options._quicOprtions._initialMaxData);                                      // initial_max_data の設定(コネクションに対する上限サイズ)
         quiche_config_set_initial_max_stream_data_bidi_local(config, options._quicOprtions._initialMaxStreamDataBidiLocal);     // initial_max_stream_data_bidi_local の設定(ローカル始動の双方向ストリームの初期フロー制御値)
@@ -319,17 +367,16 @@ namespace qwfs
         quiche_config_set_max_connection_window(config, options._quicOprtions._maxConnectionWindowSize);                        // コネクションに用いる最大ウィンドウサイズ
         quiche_config_set_max_stream_window(config, options._quicOprtions._maxStreamWindowSize);                                // ストリームに用いる最大ウィンドウサイズ
         quiche_config_set_active_connection_id_limit(config, options._quicOprtions._activeConnectionIdLimit);                   // アクティブなコネクション ID の上限値
-        
-        // ステートレスリセット用トークンの設定。現状未対応
-        // quiche_config_set_stateless_reset_token
 
         // 以下は qwfs の用途では基本的にはサーバ側の設定なのでスルー
+        // quiche_config_enable_hystart
         // quiche_config_set_max_ack_delay
         // quiche_config_set_ack_delay_exponent
         // quiche_config_load_priv_key_from_pem_file
         // quiche_config_set_cc_algorithm
         // quiche_config_enable_hystart
         // quiche_config_enable_pacing
+        // quiche_config_grease
 
         // DATAGRAM 対応 : 現状未対応
         // quiche_config_enable_dgram
@@ -360,40 +407,31 @@ namespace qwfs
     // quiche のコネクションを生成する関数
     quiche_conn* Connection::CreateQuicheConnection(const char* host, quiche_config* config) const
     {
-        // Initial Packet で使用する SCID を乱数から生成する
-        // SCID は QUIC バージョン 1 までは 20 バイト以内に抑える必要がある(暫定で quiche の example の設定値に準拠)
-        uint8_t scid[16] = {};
-        std::random_device rd;
-        std::mt19937_64 mt(rd());
-        for (auto& id : scid)
-        {
-            id = mt() % 256;
-        }
-
-        socklen_t localAddrLen = sizeof(struct sockaddr_in6);
-        auto result = getsockname(_sock, (struct sockaddr*)&_localAddInfo, &localAddrLen);
-        if (0 != result)
-        {
-            return nullptr;
-        };
-
         // quiche のコネクションハンドルを作成する。この段階ではまだ通信は実施されない
-        return quiche_connect(host, (const uint8_t*)scid, sizeof(scid),
-            (struct sockaddr*)&_localAddInfo, localAddrLen,
+        return quiche_connect(host, CreateToken().data(), TokenLength,
+            (struct sockaddr*)&_localAddInfo, _localAddrLen,
             _peerAddInfo->ai_addr, _peerAddInfo->ai_addrlen,
             config);
     }
 
+    std::array<uint8_t, Connection::TokenLength> Connection::CreateToken() const
+    {
+        // SCID や stateless_reset_token を乱数から生成する
+        // SCID は QUIC バージョン 1 までは 20 バイト以内に抑える必要がある(暫定で quiche の example の設定値に準拠)
+        std::array<uint8_t, Connection::TokenLength> token;
+        std::random_device rd;
+        std::mt19937_64 mt(rd());
+        for (auto& val : token)
+        {
+            val = mt() % 256;
+        }
+        return token;
+    }
+
     // 非同期 UDP ソケットの生成関数
-    // todo : とりあえずブロックで処理しているが後で整理
     QwfsResult Connection::CreateUdpSocket()
     {
-        if (QWFS_INVALID_SOCKET != _sock)
-        {
-            // 経路によってはここに入るので解放してあげる
-            socketwrapper::Close(_sock);
-            _sock = QWFS_INVALID_SOCKET;
-        }
+        CloseUdpSocket();
 
         const struct addrinfo hints =
         {
@@ -428,12 +466,18 @@ namespace qwfs
 
         if (connect(_sock, _peerAddInfo->ai_addr, (int)_peerAddInfo->ai_addrlen) < 0)
         {
-            socketwrapper::Close(_sock);
-            _sock = QWFS_INVALID_SOCKET;
+            CloseUdpSocket();
             freeaddrinfo(_peerAddInfo);
             _peerAddInfo = nullptr;
             return SetStatus(QwfsStatus::ErrorSocket, "Failed to connect socket.");
         }
+
+        _localAddrLen = sizeof(struct sockaddr_storage);
+        auto result = getsockname(_sock, (struct sockaddr*)&_localAddInfo, &_localAddrLen);
+        if (0 != result)
+        {
+            return SetStatus(QwfsStatus::ErrorSocket, "Failed to getsockname.");
+        };
 
         if (nullptr != _debugOutput)
         {
@@ -445,6 +489,22 @@ namespace qwfs
         return QwfsResult::Ok;
     }
 
+    void Connection::CloseUdpSocket()
+    {
+        if (QWFS_INVALID_SOCKET != _sock)
+        {
+            socketwrapper::Close(_sock);
+            _sock = QWFS_INVALID_SOCKET;
+        }
+        _localAddInfo = nullptr;
+        if (nullptr != _peerAddInfo)
+        {
+            freeaddrinfo(_peerAddInfo);
+            _peerAddInfo = nullptr;
+        }
+    }
+
+    // todo : 連続実行で事故るので msec まで入れた方が良い
     QwfsResult Connection::SetQlogSettings()
     {
         if (_qlogPath.empty())
@@ -454,17 +514,19 @@ namespace qwfs
 
         std::time_t timeResult = time(nullptr);
         const tm* localTime = localtime(&timeResult);
+        auto msec = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()) % 1000;
         std::stringstream log;
         std::stringstream ss;
         ss << _qlogPath;
         ss << "/qwfs_";
-        ss << _hostName << "_";
+        ss << _hostName << "_" << _port << "_";
         ss << std::setw(2) << std::setfill('0') << localTime->tm_year - 100;
         ss << std::setw(2) << std::setfill('0') << localTime->tm_mon + 1;
         ss << std::setw(2) << std::setfill('0') << localTime->tm_mday;
         ss << std::setw(2) << std::setfill('0') << localTime->tm_hour;
         ss << std::setw(2) << std::setfill('0') << localTime->tm_min;
         ss << std::setw(2) << std::setfill('0') << localTime->tm_sec;
+        ss << std::setw(3) << std::setfill('0') << msec.count();
         ss << ".qlog";
         if (!quiche_conn_set_qlog_path(_quicheConnection, ss.str().c_str(), "qwfs log", ""))
         {
@@ -489,14 +551,13 @@ namespace qwfs
             return QwfsResult::Ok;
         }
 
-        uint8_t sendBuffer[MAX_DATAGRAM_SIZE] = { 0 };
-
         // quiche によって送信データ生成する
         // quiche_conn_send を呼ぶだけで、内部のステータス(コネクションやストリームの状況)に応じて適切なデータを生成してくれる
         // 一回で送り切れない場合があるのでループで取り切る必要がある
-        quiche_send_info sendInfo;
         while (1)
         {
+            uint8_t sendBuffer[MAX_DATAGRAM_SIZE] = { 0 };
+            quiche_send_info sendInfo;
             ssize_t writeSize = quiche_conn_send(_quicheConnection, sendBuffer, sizeof(sendBuffer), &sendInfo);
             if (QUICHE_ERR_DONE == writeSize)
             {
@@ -521,6 +582,8 @@ namespace qwfs
                 ss << "Failed to send packet(Error is " << socketwrapper::GetError() << ")." << std::endl;
                 return SetStatus(QwfsStatus::ErrorSocket, ss.str().c_str());
             }
+
+            // 残データ有り(かもしれない)
         }
 
         return QwfsResult::Ok;
@@ -542,7 +605,7 @@ namespace qwfs
         {
             // UDP パケットを受信
             struct sockaddr_storage recvPeerAddr;
-            socklen_t recvPeerAddrLen = sizeof(struct sockaddr_in6);
+            socklen_t recvPeerAddrLen = sizeof(recvPeerAddr);
             memset(&recvPeerAddr, 0, recvPeerAddrLen);
             ssize_t recvSize = recvfrom(_sock, receiveBuffer, sizeof(receiveBuffer), 0, (struct sockaddr*)&recvPeerAddr, &recvPeerAddrLen);
             if (QWFS_SOCKET_ERROR >= recvSize)
@@ -572,6 +635,10 @@ namespace qwfs
                 (struct sockaddr*)&_localAddInfo,
                 sizeof(struct sockaddr_in6),
             };
+            if (recv_info.from->sa_family == AF_INET)
+            {
+                recv_info.to_len = sizeof(struct sockaddr_in);
+            }
             ssize_t readSize = quiche_conn_recv(_quicheConnection, reinterpret_cast<uint8_t*>(receiveBuffer), recvSize, &recv_info);
             if (0 > readSize)
             {
@@ -590,6 +657,25 @@ namespace qwfs
                 }
                 return result;
             }
+
+#if 0
+            // 
+            static uint8_t buf[65535];
+            uint8_t type;
+            uint32_t version;
+            uint8_t scid[QUICHE_MAX_CONN_ID_LEN];
+            size_t scid_len = sizeof(scid);
+            uint8_t dcid[QUICHE_MAX_CONN_ID_LEN];
+            size_t dcid_len = sizeof(dcid);
+            uint8_t odcid[QUICHE_MAX_CONN_ID_LEN];
+            size_t odcid_len = sizeof(odcid);
+            uint8_t token[MAX_TOKEN_LEN];
+            size_t token_len = sizeof(token);
+            auto rc = quiche_header_info(reinterpret_cast<const uint8_t*>(receiveBuffer), recvSize, LOCAL_CONN_ID_LEN, &version, &type, scid, &scid_len, dcid, &dcid_len, token, &token_len);
+            if (token_len != 0) {
+                int hoge = 0;
+            }
+#endif
         }
 
         return QwfsResult::Ok;
@@ -598,9 +684,9 @@ namespace qwfs
     void Connection::CheckConnectionClosed()
     {
         if (
-            (nullptr == _quicheConnection)  ||
-            (Phase::Wait > _phase)          ||
-            (_status < QwfsStatus::Wait)    ||
+            (nullptr == _quicheConnection) ||
+            (Phase::Wait > _phase) ||
+            (_status < QwfsStatus::Wait) ||
             (_status == QwfsStatus::Aborting)
             )
         {
@@ -621,8 +707,8 @@ namespace qwfs
     {
         // todo : きちんとした挙動の理解
         if (
-            (nullptr == _quicheConnection)  ||
-            (_phase < Phase::Handshake)     ||
+            (nullptr == _quicheConnection) ||
+            (_phase < Phase::Handshake) ||
             (_status < QwfsStatus::Wait)
             )
         {
@@ -633,15 +719,20 @@ namespace qwfs
         auto timeout = quiche_conn_timeout_as_millis(_quicheConnection);
         if (0U == timeout)
         {
-            // タイムアウトイベントを呼ぶ
-            quiche_conn_on_timeout(_quicheConnection);
+            Timeout();
+        }
+    }
 
-            if (!(_status == QwfsStatus::Aborting) && (quiche_conn_is_closed(_quicheConnection)))
-            {
-                // クローズしてあげる
-                SetPhase(Phase::StartShutdown);
-                SetStatus(QwfsStatus::ErrorTimeout, "Connection close");    // ソケットエラー時とかにも入るのでメッセージも timeout に言及しない
-            }
+    void Connection::Timeout()
+    {
+        // タイムアウトイベントを呼ぶ
+        quiche_conn_on_timeout(_quicheConnection);
+
+        if (!(_status == QwfsStatus::Aborting) && (quiche_conn_is_closed(_quicheConnection)))
+        {
+            // クローズしてあげる
+            SetPhase(Phase::StartShutdown);
+            SetStatus(QwfsStatus::ErrorTimeout, "Connection close");    // ソケットエラー時とかにも入るのでメッセージも timeout に言及しない
         }
     }
 
@@ -684,6 +775,10 @@ namespace qwfs
             _h3StreamsMap.emplace(streamId, stream->get());  // stream id は固有値なので find 確認はしない
             _h3Streams.push_back(std::move(*stream));
             _h3StreamsStock.pop_front();
+
+            std::stringstream ss;
+            ss << "[qwfs info]Start stream (ID : " << streamId << ")";
+            DebugOutput(ss.str().c_str());
         }
 
         if ((0 < num) && (QwfsStatus::Wait == _status))
@@ -693,8 +788,26 @@ namespace qwfs
             _totalWriteSize = 0U;
         }
 
-
         return QwfsResult::Ok;
+    }
+
+    void Connection::RetryStream()
+    {
+        // エラーのリストを戻す
+        while (!_h3StreamsErrorStock.empty())
+        {
+            auto itr = _h3StreamsErrorStock.begin();
+            _h3StreamsStock.push_back(std::move(*itr));
+            _h3StreamsErrorStock.pop_front();
+        }
+
+        // 通信中のものがある場合も戻す (Recconect 呼び出し時にありえる)
+        while (!_h3Streams.empty())
+        {
+            auto itr = _h3Streams.begin();
+            _h3StreamsStock.push_back(std::move(*itr));
+            _h3Streams.pop_front();
+        }
     }
 
     void Connection::ShutdownStream()
@@ -705,7 +818,94 @@ namespace qwfs
         }
     }
 
-    void Connection::GetProgress(uint64_t* progress, uint64_t *totalWriteSize)
+    bool Connection::IsEnabledZeroRtt() const
+    {
+        return _isLoadedSessionForZeroRtt && (nullptr == _quicheH3Connection);
+    }
+
+    bool Connection::SaveSessionForZeroRtt() const
+    {
+        if (_zeroRttSessionPath.empty())
+        {
+            return false;
+        }
+        const uint8_t* out;
+        size_t out_len;
+        quiche_conn_session(_quicheConnection, &out, &out_len);
+        if (0 == out_len)
+        {
+            return false;
+        }
+        auto file = fopen(_zeroRttSessionPath.c_str(), "wb");
+        if (nullptr == file)
+        {
+            return false;
+        }
+        fwrite(out, out_len, 1, file);
+        fclose(file);
+
+        return true;
+    }
+
+    bool Connection::LoadSessionForZeroRtt() const
+    {
+        if (_zeroRttSessionPath.empty())
+        {
+            return false;
+        }
+        auto file = fopen(_zeroRttSessionPath.c_str(), "rb");
+        if (nullptr == file)
+        {
+            return false;
+        }
+        char buffer[1024 * 512] = { 0 };
+        constexpr auto bufferSize = sizeof(buffer);
+        size_t totalReadSize = 0;
+        while (!feof(file))
+        {
+            auto readSize = fread(buffer, 1, bufferSize, file);
+            if (0 != ferror(file))
+            {
+            }
+            totalReadSize += readSize;
+        }
+        fclose(file);
+        if (0 >= totalReadSize)
+        {
+            return false;
+        }
+        if (0 != quiche_conn_set_session(_quicheConnection, reinterpret_cast<const uint8_t*>(buffer), totalReadSize))
+        {
+            return false;
+        }
+
+        return true;
+    }
+
+    bool Connection::IsEnabledConnectionMigration() const
+    {
+        auto enableMigrationServer = quiche_available_dcids(_quicheConnection) > 0;
+        auto isCreateH3Connection = (nullptr != _quicheH3Connection);
+        return (!_options._quicOprtions._disableActiveMigration && isCreateH3Connection && enableMigrationServer);
+    }
+
+    bool Connection::ConnectionMigrationHasTimedOut() const
+    {
+        auto endTime = std::chrono::system_clock::now();
+        auto durationTime = endTime - _startTime;
+        auto msec = std::chrono::duration_cast<std::chrono::milliseconds>(durationTime).count();
+        return msec > ConnectionMigrationTimeOut;
+    }
+
+    QwfsResult Connection::TransitionConnectionMigration()
+    {
+        CloseUdpSocket();
+        SetStatus(QwfsStatus::Wait);    // status がエラーになっていることがあるので戻す
+        SetPhase(Phase::ConnectionMigration);
+        return QwfsResult::Ok;
+    }
+
+    void Connection::GetProgress(uint64_t* progress, uint64_t* totalWriteSize)
     {
         for (auto& stream : _h3Streams)
         {
@@ -716,7 +916,14 @@ namespace qwfs
 
     void Connection::Retry()
     {
-        _callRetry = true;
+        if (QwfsStatus::Wait > _status)
+        {
+            _callRetry = true;
+        }
+        else
+        {
+            DebugOutput("[qwfs info]Retry did not run. now status is not error.");
+        }
     }
 
     void Connection::Abort()
@@ -735,13 +942,28 @@ namespace qwfs
         SetStatus(QwfsStatus::Aborting);
     }
 
+    QwfsResult Connection::Reconnect()
+    {
+        CloseUdpSocket();
+        if (IsEnabledConnectionMigration())
+        {
+            return TransitionConnectionMigration();
+        }
+        else
+        {
+            SetPhase(Phase::CreateSocket);
+            return ConvertStatusToResult(_status);
+        }
+    }
+
     // パケットの初期化の実施
     QwfsResult Connection::UpdatePhaseCreateSocket(Connection* connection) const
     {
+        connection->ClearForRetry();
+
         auto result = connection->CreateUdpSocket();
         if (QwfsResult::Ok != result)
         {
-            // ソケットからの再生成を待つ(エラー遷移は CreateUdpSocket 内で実施)
             return result;
         }
 
@@ -751,22 +973,34 @@ namespace qwfs
 
     QwfsResult Connection::UpdatePhaseInitialize(Connection* connection) const
     {
+        // quiche コネクションや設定の実施。このタイミングだとまだ通信は始まらない
         connection->SetOptionsInternal();
-
-        ClearQuicheConnection(connection);
-
         connection->_quicheConnection = connection->CreateQuicheConnection(connection->_hostName.c_str(), connection->_quicheConfig);
         if (nullptr == connection->_quicheConnection)
         {
             connection->SetPhase(Phase::Wait);
-            connection->SetStatus(QwfsStatus::CriticalErrorQuiche, "Failed to create quiche connection.");
-            return QwfsResult::CriticalError;
+            return connection->SetStatus(QwfsStatus::CriticalErrorQuiche, "Failed to create quiche connection.");
         }
-
         auto result = connection->SetQlogSettings();
         if (QwfsResult::Ok != result)
         {
             return result;
+        }
+
+        // 0-RTT
+        if (connection->_options._quicOprtions._enableEarlyData)
+        {
+            connection->_isLoadedSessionForZeroRtt = connection->LoadSessionForZeroRtt();
+        }
+
+        // Connection Migration が有効な場合には先に使用する scid を発行しておく(サーバへの送信が入る為)
+        if (!_options._quicOprtions._disableActiveMigration)
+        {
+            if (!quiche_new_source_cid(_quicheConnection, CreateToken().data(), TokenLength, CreateToken().data(), true))
+            {
+                connection->SetPhase(Phase::Wait);
+                return connection->SetStatus(QwfsStatus::CriticalErrorQuiche, "Failed to create new scid.");
+            }
         }
 
         connection->SetPhase(Phase::Handshake);
@@ -775,6 +1009,23 @@ namespace qwfs
 
     QwfsResult Connection::UpdatePhaseHandshake(Connection* connection) const
     {
+        // 0-RTT の条件が揃っている場合はハンドシェイク確立前にリクエストの送信を開始する
+        if (quiche_conn_is_in_early_data(connection->_quicheConnection) && IsEnabledZeroRtt())
+        {
+            DebugOutput("[qwfs info]eary data is start!!");
+            connection->_quicheH3Connection = quiche_h3_conn_new_with_transport(connection->_quicheConnection, connection->_quicheH3Config);
+            if (nullptr == connection->_quicheH3Connection)
+            {
+                return QwfsResult::CriticalError;
+            }
+            auto streamResult = connection->StartStream();
+            if (QwfsResult::Ok != streamResult)
+            {
+                return streamResult;
+            }
+        }
+
+        // ハンドシェイク確立関連処理
         if (quiche_conn_is_established(connection->_quicheConnection))
         {
             // 確立したコネクションのバージョンを確認したい場合の処理
@@ -790,17 +1041,22 @@ namespace qwfs
                 connection->DebugOutput(ss.str().c_str());
             }
 
+            // todo : 各種トランスポートパラメータを取得し保存しておく
+            // quiche_conn_stats(const quiche_conn * conn, quiche_stats * out);
+
             // HTTP/3 コネクションの作成(このタイミングではまだ通信しない)
-            if (nullptr != connection->_quicheH3Connection)
-            {
-                quiche_h3_conn_free(connection->_quicheH3Connection);
-            }
-            connection->_quicheH3Connection = quiche_h3_conn_new_with_transport(connection->_quicheConnection, connection->_quicheH3Config);
+            // 0-RTT 時には既に生成済みなのでスルーする
             if (nullptr == connection->_quicheH3Connection)
             {
-                connection->SetPhase(Phase::StartShutdown);
-                return connection->SetStatus(QwfsStatus::CriticalErrorQuiche, "Failed to quiche_h3_conn_new_with_transport");
+                connection->_quicheH3Connection = quiche_h3_conn_new_with_transport(connection->_quicheConnection, connection->_quicheH3Config);
+                if (nullptr == connection->_quicheH3Connection)
+                {
+                    connection->SetPhase(Phase::StartShutdown);
+                    return connection->SetStatus(QwfsStatus::CriticalErrorQuiche, "Failed to quiche_h3_conn_new_with_transport");
+                }
             }
+            // Connection Migration に対応していない Recconet をした場合通信中の HTTP/3 が居る場合がある
+            connection->RetryStream();
 
             connection->SetPhase(Phase::Wait);
         }
@@ -814,22 +1070,12 @@ namespace qwfs
         // リトライ要求が来ているか確認
         if (connection->_callRetry)
         {
-            connection->DebugOutput("[qwfs info]Start retry");
-
-            // エラーのリストを戻す
-            while (!connection->_h3StreamsErrorStock.empty())
-            {
-                auto itr = connection->_h3StreamsErrorStock.begin();
-                connection->_h3StreamsStock.push_back(std::move(*itr));
-                connection->_h3StreamsErrorStock.pop_front();
-            }
-            if (QwfsStatus::Wait > _status)
-            {
-                // 内部状態等をクリアしないといけないので quiche_conn も作り直さないといけない
-                connection->SetPhase(Phase::Initialize);
-                connection->SetStatus(QwfsStatus::Wait);
-            }
+            DebugOutput("[qwfs info]Start retry");
+            connection->RetryStream();
             connection->_callRetry = false;
+            // 内部状態等をクリアしないといけないので quiche_conn も作り直さないといけない
+            connection->SetPhase(Phase::Initialize);
+            connection->SetStatus(QwfsStatus::Wait);
             return QwfsResult::Ok;
         }
 
@@ -853,8 +1099,14 @@ namespace qwfs
             if (!_settingsReceived) {
                 auto rc = quiche_h3_for_each_setting(connection->_quicheH3Connection, ForEachSettingCallback, NULL);
                 if (rc == 0) {
-                    connection->SetSettingsReceived(true);
+                    SaveSessionForZeroRtt();
+                    connection->SettingsReceived();
                 }
+            }
+            if (nullptr == connection->_h3StreamsMap[streamId])
+            {
+                // Connection Migration 時に解放されたものが混ざる事がある？
+                break;
             }
             // todo : 戻り値確認
             switch (quiche_h3_event_type(event))
@@ -915,8 +1167,7 @@ namespace qwfs
         {
             // close socket
             // todo : closesocket 関連のちゃんとした処理
-            socketwrapper::Close(connection->_sock);
-            connection->_sock = QWFS_INVALID_SOCKET;
+            connection->CloseUdpSocket();
 
             if (connection->_callAbort)
             {
@@ -941,6 +1192,38 @@ namespace qwfs
             }
         }
 
+        return QwfsResult::Ok;
+    }
+
+    QwfsResult Connection::UpdatePhaseConnectionMigration(Connection* connection) const
+    {
+        // エラーやネットワークインターフェース切り替わり、上層からの強制切り替え指令時に入るので socket を再生成する
+        connection->CreateUdpSocket();  // status で見るので戻り値は無視
+        auto status = connection->GetStatus();
+        if (status == QwfsStatus::ErrorResolveHost)
+        {
+            // ネットワークインターフェースの切り替えによる Connection Migration の場合はしばらく不通タイミングがある
+            // しばらく(現状固定値)待っても復旧しない場合はエラーに遷移させる
+            if (connection->ConnectionMigrationHasTimedOut())
+            {
+                connection->Timeout();
+                return QwfsResult::Error;
+            }
+            else
+            {
+                return QwfsResult::Ok;
+            }
+        }
+
+        if (!quiche_probe_path(_quicheConnection, (struct sockaddr*)&_localAddInfo, _localAddrLen, _peerAddInfo->ai_addr, _peerAddInfo->ai_addrlen))
+        {
+            // 条件が合わずに Connection Migration 出来ない
+            // 現状エラーに遷移
+            // todo : 上位からフラグによりエラーかコネクションからやり直すか選べるようにする
+            connection->SetStatus(QwfsStatus::ErrorConnectionMigration, "Failed to probe path");
+        }
+
+        connection->SetPhase(Phase::Wait);
         return QwfsResult::Ok;
     }
 
@@ -973,27 +1256,31 @@ namespace qwfs
 
         switch (phase)
         {
-            case Phase::CreateSocket:
-                _updateFunc = [&](Connection* connection) { return UpdatePhaseCreateSocket(connection); };
-                break;
-            case Phase::Initialize:
-                _updateFunc = [&](Connection* connection) { return UpdatePhaseInitialize(connection); };
-                break;
-            case Phase::Handshake:
-                _updateFunc = [&](Connection* connection) { return UpdatePhaseHandshake(connection); };
-                break;
-            case Phase::Wait:
-                _updateFunc = [&](Connection* connection) { return UpdatePhaseWait(connection); };
-                break;
-            case Phase::StartShutdown:
-                _updateFunc = [&](Connection* connection) { return UpdatePhaseStartShutdown(connection); };
-                break;
-            case Phase::WaitShutdown:
-                _updateFunc = [&](Connection* connection) { return UpdatePhaseWaitShutdown(connection); };
-                break;
-            default:
-                _updateFunc = nullptr;
-                break;
+        case Phase::CreateSocket:
+            _updateFunc = [&](Connection* connection) { return UpdatePhaseCreateSocket(connection); };
+            break;
+        case Phase::Initialize:
+            _updateFunc = [&](Connection* connection) { return UpdatePhaseInitialize(connection); };
+            break;
+        case Phase::Handshake:
+            _updateFunc = [&](Connection* connection) { return UpdatePhaseHandshake(connection); };
+            break;
+        case Phase::Wait:
+            _updateFunc = [&](Connection* connection) { return UpdatePhaseWait(connection); };
+            break;
+        case Phase::StartShutdown:
+            _updateFunc = [&](Connection* connection) { return UpdatePhaseStartShutdown(connection); };
+            break;
+        case Phase::WaitShutdown:
+            _updateFunc = [&](Connection* connection) { return UpdatePhaseWaitShutdown(connection); };
+            break;
+        case Phase::ConnectionMigration:
+            _updateFunc = [&](Connection* connection) { return UpdatePhaseConnectionMigration(connection); };
+            StartConnectionMigrationTimer();
+            break;
+        default:
+            _updateFunc = nullptr;
+            break;
         }
         _phase = phase;
     }
@@ -1032,41 +1319,41 @@ namespace qwfs
         switch (error)
         {
             // 内部的に通信続行で直りそうなもの
-            case QUICHE_ERR_DONE:
-            case QUICHE_ERR_FLOW_CONTROL:
-            case QUICHE_ERR_FINAL_SIZE:
-            case QUICHE_ERR_CONGESTION_CONTROL:
-                return nowStatus;
+        case QUICHE_ERR_DONE:
+        case QUICHE_ERR_FLOW_CONTROL:
+        case QUICHE_ERR_FINAL_SIZE:
+        case QUICHE_ERR_CONGESTION_CONTROL:
+            return nowStatus;
 
             // リトライで直りそうなもの
-            case QUICHE_ERR_STREAM_RESET:
-                return QwfsStatus::Error;   // 適当なステータスを返して Connection 側でリトライしてもらう
+        case QUICHE_ERR_STREAM_RESET:
+            return QwfsStatus::Error;   // 適当なステータスを返して Connection 側でリトライしてもらう
 
             // こちらの実装ミスで発生するもの
-            case QUICHE_ERR_BUFFER_TOO_SHORT:
-            case QUICHE_ERR_STREAM_LIMIT:
-                return QwfsStatus::CriticalError;
+        case QUICHE_ERR_BUFFER_TOO_SHORT:
+        case QUICHE_ERR_STREAM_LIMIT:
+            return QwfsStatus::CriticalError;
 
             // 証明書の設定で発生する TLS 関連のエラー
-            case QUICHE_ERR_TLS_FAIL:
-                // ソケットクローズからやり直す必要がある
-                return QwfsStatus::ErrorTlsInvalidCert;
+        case QUICHE_ERR_TLS_FAIL:
+            // ソケットクローズからやり直す必要がある
+            return QwfsStatus::ErrorTlsInvalidCert;
 
             // 証明書の設定以外の TLS 関連のエラー
-            case QUICHE_ERR_CRYPTO_FAIL:
-                return QwfsStatus::ErrorTls;
+        case QUICHE_ERR_CRYPTO_FAIL:
+            return QwfsStatus::ErrorTls;
 
             // サーバからのデータがおかしい等の内部エラーっぽいもの。サーバの問題なので繋ぎ直してもダメ
-            case QUICHE_ERR_UNKNOWN_VERSION:
-            case QUICHE_ERR_INVALID_FRAME:
-            case QUICHE_ERR_INVALID_PACKET:
-            case QUICHE_ERR_INVALID_STATE:
-            case QUICHE_ERR_INVALID_STREAM_STATE:
-            case QUICHE_ERR_INVALID_TRANSPORT_PARAM:
-                return QwfsStatus::ErrorInvalidServer;
+        case QUICHE_ERR_UNKNOWN_VERSION:
+        case QUICHE_ERR_INVALID_FRAME:
+        case QUICHE_ERR_INVALID_PACKET:
+        case QUICHE_ERR_INVALID_STATE:
+        case QUICHE_ERR_INVALID_STREAM_STATE:
+        case QUICHE_ERR_INVALID_TRANSPORT_PARAM:
+            return QwfsStatus::ErrorInvalidServer;
 
-            default:
-                return QwfsStatus::CriticalErrorQuiche;
+        default:
+            return QwfsStatus::CriticalErrorQuiche;
         }
     }
 
@@ -1076,10 +1363,5 @@ namespace qwfs
         {
             _debugOutput(message);
         }
-    }
-
-    void Connection::SetSettingsReceived(bool received)
-    {
-        _settingsReceived = received;
     }
 }

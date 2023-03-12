@@ -7,6 +7,12 @@ namespace qwfs
     {
     }
 
+    ConnectionManager::~ConnectionManager()
+    {
+        _connections.clear();
+    }
+
+
     Connection* ConnectionManager::Create(const char* hostName, const char* port, const QwfsCallbacks& callbacks, DebugOutputCallback debugOutput)
     {
         if ((nullptr == hostName) || (nullptr == port))

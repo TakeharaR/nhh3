@@ -67,6 +67,11 @@ QwfsResult qwfsAbort(QwfsId hostId)
     return qwfs::Abort(hostId);
 }
 
+QwfsResult qwfsReconnect(QwfsId hostId)
+{
+    return qwfs::Reconnect(hostId);
+}
+
 const char* qwfsGetErrorDetail(QwfsId hostId)
 {
     return qwfs::GetErrorDetail(hostId);
@@ -76,6 +81,7 @@ QwfsResult qwfsSetDebugOutput(DebugOutputCallback debugOutput)
 {
     return qwfs::SetDebugOutput(debugOutput);
 }
+
 
 
 

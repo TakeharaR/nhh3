@@ -18,13 +18,13 @@ namespace qwfs
         , const QwfsCallbacks& callbacks
         , DebugOutputCallback debugOutput
     ) :
-        _status(QwfsStatus::Connecting)
-        , _externalId(externalId)
+        _externalId(INVALID_QWFS_ID)
         , _callbacks(callbacks)
         , _debugOutput(debugOutput)
         , _quicheQuicConnection(nullptr)
         , _quicheH3Connection(nullptr)
         , _streamId(0U)
+        , _status(QwfsStatus::Connecting)
         , _file(nullptr)
         , _body(nullptr)
         , _bodySize(0U)
@@ -71,6 +71,10 @@ namespace qwfs
             _reqHeadersForQuiche[num].value = reinterpret_cast<const uint8_t*>(_reqHeaders[num]._value.c_str());
             _reqHeadersForQuiche[num].value_len = _reqHeaders[num]._value.size();
         }
+
+        // todo : MAX_DATAGRAM_SIZE が小さい場合、この値を超えるサイズが来ることがあり、その場合にステータスが進行しなくなるので受信バッファには十分なサイズを持たせる
+        _recvTmpBufSize = MAX_DATAGRAM_SIZE * 3;
+        _recvTmpBuf = new uint8_t[_recvTmpBufSize];
     }
 
     Stream::~Stream()
@@ -79,6 +83,10 @@ namespace qwfs
         if (nullptr != _reqHeadersForQuiche)
         {
             delete[] _reqHeadersForQuiche;
+        }
+        if (nullptr != _recvTmpBuf)
+        {
+            delete[] _recvTmpBuf;
         }
     }
 
@@ -122,6 +130,7 @@ namespace qwfs
 
     int64_t Stream::Retry()
     {
+        // todo : 外部識別子を用いた効率化
         Clear();
         SetStatus(QwfsStatus::Connecting);
         return Start(_quicheQuicConnection, _quicheH3Connection);
@@ -135,9 +144,19 @@ namespace qwfs
         // todo : 効率化
         auto getHeader = [](uint8_t* name, size_t name_len, uint8_t* value, size_t value_len, void* argp) -> int
         {
+            if (nullptr == argp)
+            {
+                return 0;
+            }
             auto stream = reinterpret_cast<Stream*>(argp);
             std::string headerName(reinterpret_cast<char*>(name), name_len);
             std::string headerValue(reinterpret_cast<char*>(value), value_len);
+
+#if 0
+            std::stringstream ss;
+            ss << "[qwfs info][Stream:" << stream->GetStreamId() << "]Recive header : " << headerName << " : " << headerValue;
+            stream->_debugOutput(ss.str().c_str());
+#endif
 
             if ("content-length" == headerName)
             {
@@ -168,8 +187,7 @@ namespace qwfs
         // HTTP ボディの受信を積み上げる
 
         // quiche からの受信したバッファを受け取る。一度で受け取れないことがある(上層の quiche_h3_conn_poll でまたここにくる)
-        char buf[MAX_DATAGRAM_SIZE] = { 0 };
-        auto recvSize = quiche_h3_recv_body(_quicheH3Connection, _quicheQuicConnection, _streamId, reinterpret_cast<uint8_t*>(buf), sizeof(buf));
+        auto recvSize = quiche_h3_recv_body(_quicheH3Connection, _quicheQuicConnection, _streamId, _recvTmpBuf, _recvTmpBufSize);
         if (0 > recvSize)
         {
             std::stringstream ss;
@@ -180,7 +198,7 @@ namespace qwfs
         // 書き込み処理
         if (nullptr != _file)
         {
-            fwrite(buf, recvSize, 1, _file);
+            fwrite(_recvTmpBuf, recvSize, 1, _file);
         }
         else
         {
@@ -202,10 +220,16 @@ namespace qwfs
                     _body = reinterpret_cast<char*>(realloc(reinterpret_cast<void*>(_body), _writeSize + recvSize));
                 }
             }
-            std::memcpy(reinterpret_cast<void*>(&_body[_writeSize]), buf, recvSize);
+            std::memcpy(reinterpret_cast<void*>(&_body[_writeSize]), _recvTmpBuf, recvSize);
         }
         _writeSize += recvSize;
         _progress += recvSize;
+
+#if 0
+        std::stringstream ss;
+        ss << "[qwfs info][Stream:]" << GetStreamId() << "Recive body. Recv size is " << recvSize;
+        _debugOutput(ss.str().c_str());
+#endif
 
         return _status;
     }
@@ -293,10 +317,11 @@ namespace qwfs
 
     void Stream::Clear()
     {
+        _quicheQuicConnection = nullptr;
+        _quicheH3Connection = nullptr;
         _streamId = 0U;
-
-        _resHeaders.clear();
-
+        _status = QwfsStatus::Connecting;
+        _errorDetail.clear();
         if (nullptr != _file)
         {
             fclose(_file);
@@ -311,6 +336,7 @@ namespace qwfs
         _writeSize = 0U;
         _progress = 0U;
         _responseCode = 0U;
+        _resHeaders.clear();
     }
 
     QwfsStatus Stream::ConvertQuicheH3ErrorToStatus(quiche_h3_error error, QwfsStatus nowStatus) const
@@ -319,79 +345,79 @@ namespace qwfs
         {
             // Transport 層のエラー
             // 内部的に通信続行で直りそうなもの
-            case QUICHE_H3_TRANSPORT_ERR_DONE:
-            case QUICHE_H3_TRANSPORT_ERR_FLOW_CONTROL:
-            case QUICHE_H3_TRANSPORT_ERR_FINAL_SIZE:
-            case QUICHE_H3_TRANSPORT_ERR_CONGESTION_CONTROL:
-                return nowStatus;
+        case QUICHE_H3_TRANSPORT_ERR_DONE:
+        case QUICHE_H3_TRANSPORT_ERR_FLOW_CONTROL:
+        case QUICHE_H3_TRANSPORT_ERR_FINAL_SIZE:
+        case QUICHE_H3_TRANSPORT_ERR_CONGESTION_CONTROL:
+            return nowStatus;
 
             // リトライで直りそうなもの
-            case QUICHE_H3_TRANSPORT_ERR_STREAM_RESET:
-                return QwfsStatus::Error;   // 適当なステータスを返して Connection 側でリトライしてもらう
+        case QUICHE_H3_TRANSPORT_ERR_STREAM_RESET:
+            return QwfsStatus::Error;   // 適当なステータスを返して Connection 側でリトライしてもらう
 
             // こちらの実装ミスで発生するもの
-            case QUICHE_H3_TRANSPORT_ERR_BUFFER_TOO_SHORT:
-            case QUICHE_H3_TRANSPORT_ERR_STREAM_LIMIT:
-                return QwfsStatus::CriticalError;
+        case QUICHE_H3_TRANSPORT_ERR_BUFFER_TOO_SHORT:
+        case QUICHE_H3_TRANSPORT_ERR_STREAM_LIMIT:
+            return QwfsStatus::CriticalError;
 
             // 証明書の設定で発生する TLS 関連のエラー
-            case QUICHE_H3_TRANSPORT_ERR_TLS_FAIL:
-                // ソケットクローズからやり直す必要がある
-                return QwfsStatus::ErrorTlsInvalidCert;
+        case QUICHE_H3_TRANSPORT_ERR_TLS_FAIL:
+            // ソケットクローズからやり直す必要がある
+            return QwfsStatus::ErrorTlsInvalidCert;
 
             // 証明書の設定以外の TLS 関連のエラー
-            case QUICHE_H3_TRANSPORT_ERR_CRYPTO_FAIL:
-                return QwfsStatus::ErrorTls;
+        case QUICHE_H3_TRANSPORT_ERR_CRYPTO_FAIL:
+            return QwfsStatus::ErrorTls;
 
             // サーバからのデータがおかしい等の内部エラーっぽいもの。サーバの問題なので繋ぎ直してもダメ
-            case QUICHE_H3_TRANSPORT_ERR_UNKNOWN_VERSION:
-            case QUICHE_H3_TRANSPORT_ERR_INVALID_FRAME:
-            case QUICHE_H3_TRANSPORT_ERR_INVALID_PACKET:
-            case QUICHE_H3_TRANSPORT_ERR_INVALID_STATE:
-            case QUICHE_H3_TRANSPORT_ERR_INVALID_STREAM_STATE:
-            case QUICHE_H3_TRANSPORT_ERR_INVALID_TRANSPORT_PARAM:
-                return QwfsStatus::ErrorInvalidServer;
+        case QUICHE_H3_TRANSPORT_ERR_UNKNOWN_VERSION:
+        case QUICHE_H3_TRANSPORT_ERR_INVALID_FRAME:
+        case QUICHE_H3_TRANSPORT_ERR_INVALID_PACKET:
+        case QUICHE_H3_TRANSPORT_ERR_INVALID_STATE:
+        case QUICHE_H3_TRANSPORT_ERR_INVALID_STREAM_STATE:
+        case QUICHE_H3_TRANSPORT_ERR_INVALID_TRANSPORT_PARAM:
+            return QwfsStatus::ErrorInvalidServer;
 
 
             // HTTP/3 層のエラー
 
             // 内部的に通信続行で直りそうなもの
-            case QUICHE_H3_ERR_DONE:
-            case QUICHE_H3_ERR_EXCESSIVE_LOAD:          // 過負荷による輻輳制御発生時に起きるっぽいのでここにしておく
-            case QUICHE_H3_ERR_STREAM_BLOCKED:          // QUIC 内に余裕ができればリトライで直るっぽいのでここにしておく
-            case QUICHE_H3_ERR_FRAME_UNEXPECTED:        // サーバ側が間違ったフレームを送ってきたとかその辺の挙動？っぽいのでここにしておく
-            case QUICHE_H3_ERR_FRAME_ERROR:
-            case QUICHE_H3_ERR_REQUEST_INCOMPLETE:
-                return nowStatus;
+        case QUICHE_H3_ERR_DONE:
+        case QUICHE_H3_ERR_EXCESSIVE_LOAD:          // 過負荷による輻輳制御発生時に起きるっぽいのでここにしておく
+        case QUICHE_H3_ERR_STREAM_BLOCKED:          // QUIC 内に余裕ができればリトライで直るっぽいのでここにしておく
+        case QUICHE_H3_ERR_FRAME_UNEXPECTED:        // サーバ側が間違ったフレームを送ってきたとかその辺の挙動？っぽいのでここにしておく
+        case QUICHE_H3_ERR_FRAME_ERROR:
+        case QUICHE_H3_ERR_REQUEST_INCOMPLETE:
+            return nowStatus;
 
             // リトライで直りそうなもの
-            case QUICHE_H3_ERR_CLOSED_CRITICAL_STREAM:
-            case QUICHE_H3_ERR_REQUEST_REJECTED:        // 理由次第ではリトライで復帰しないが基本的にはサーバの状況が改善すれば直る見込み
-            case QUICHE_H3_ERR_REQUEST_CANCELLED:       // 同上
-            case QUICHE_H3_ERR_CONNECT_ERROR:           // コネクションのリセットもしくはクローズが発生
-                return QwfsStatus::Error;   // 適当なステータスを返して Connection 側でリトライしてもらう
+        case QUICHE_H3_ERR_CLOSED_CRITICAL_STREAM:
+        case QUICHE_H3_ERR_REQUEST_REJECTED:        // 理由次第ではリトライで復帰しないが基本的にはサーバの状況が改善すれば直る見込み
+        case QUICHE_H3_ERR_REQUEST_CANCELLED:       // 同上
+        case QUICHE_H3_ERR_CONNECT_ERROR:           // コネクションのリセットもしくはクローズが発生
+            return QwfsStatus::Error;   // 適当なステータスを返して Connection 側でリトライしてもらう
 
             // こちらの実装ミスで発生するもの
-            case QUICHE_H3_ERR_BUFFER_TOO_SHORT:
-            case QUICHE_H3_ERR_ID_ERROR:            // ストリーム ID が使いまわされたり、上限や下限を超えると発生
-            case QUICHE_H3_ERR_SETTINGS_ERROR:      // セッティングフレームの内容が不正な場合に発生
-            case QUICHE_H3_ERR_MESSAGE_ERROR:       // HTTP メッセージの不正
-                assert(false);
-                return QwfsStatus::CriticalError;
+        case QUICHE_H3_ERR_BUFFER_TOO_SHORT:
+        case QUICHE_H3_ERR_ID_ERROR:            // ストリーム ID が使いまわされたり、上限や下限を超えると発生
+        case QUICHE_H3_ERR_SETTINGS_ERROR:      // セッティングフレームの内容が不正な場合に発生
+        case QUICHE_H3_ERR_MESSAGE_ERROR:       // HTTP メッセージの不正
+            assert(false);
+            return QwfsStatus::CriticalError;
 
             // サーバからのデータがおかしい等の内部エラーっぽいもの。サーバの問題なので繋ぎ直してもダメ
-            case QUICHE_H3_ERR_STREAM_CREATION_ERROR:
-            case QUICHE_H3_ERR_MISSING_SETTINGS:
-            case QUICHE_H3_ERR_QPACK_DECOMPRESSION_FAILED:
-                return QwfsStatus::ErrorInvalidResponse;
+        case QUICHE_H3_ERR_STREAM_CREATION_ERROR:
+        case QUICHE_H3_ERR_MISSING_SETTINGS:
+        case QUICHE_H3_ERR_QPACK_DECOMPRESSION_FAILED:
+            return QwfsStatus::ErrorInvalidResponse;
 
             // HTTP/3 で接続できず HTTP/1.1 経由で再接続する必要がある
-            case QUICHE_H3_ERR_VERSION_FALLBACK:
-                return QwfsStatus::ErrorVersionFallback;
+        case QUICHE_H3_ERR_VERSION_FALLBACK:
+            return QwfsStatus::ErrorVersionFallback;
 
-            case QUICHE_H3_ERR_INTERNAL_ERROR:
-            default:
-                return QwfsStatus::CriticalErrorQuiche;
+        case QUICHE_H3_ERR_INTERNAL_ERROR:
+        default:
+            return QwfsStatus::CriticalErrorQuiche;
         }
     }
 }

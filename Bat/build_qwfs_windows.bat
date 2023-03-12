@@ -27,6 +27,14 @@ if not %ERRORLEVEL%==0 (
 )
 
 :: setup quiche
+:: clean quiche local change
+pushd %QUICHE_PATH%
+call git checkout .
+popd
+
+:: patch quiche
+xcopy /Y /e .\patch\quiche %QUICHE_PATH%\quiche
+
 pushd %QUICHE_PATH%
 if "%BUIDLD_CONFIGURATION%"=="release" (
   set BUIDLD_CONFIGURATION=--release

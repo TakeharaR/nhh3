@@ -735,18 +735,20 @@ MonoBehaviour:
   Progress: {fileID: 375282199}
   Body: {fileID: 0}
   ErrorDetail: {fileID: 375282201}
-  VerifyPeer: 0
+  VerifyPeer: 1
+  EnableConnectionMigration: 0
+  EnableEarlyData: 0
   Port: 443
   HostName: cloudflare-quic.com
   UriPath: 
   SaveFilePath: 
   QlogPath: 
+  WorkPath: 
+  MaxMultipleDownloadNum: 128
   manager: {fileID: 1818178146}
   CompletedDownloadFileNum: {fileID: 714444170}
   DownloadProgressBar: {fileID: 8382759}
-  DownloadFileNum: 128
-  MaxMultipleDownloadNum: 512
-  WorkDir: 
+  DownloadFileNum: 64
 --- !u!4 &662852807
 Transform:
   m_ObjectHideFlags: 0

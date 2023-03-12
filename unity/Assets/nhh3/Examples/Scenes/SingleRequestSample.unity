@@ -596,11 +596,15 @@ MonoBehaviour:
   Body: {fileID: 1249672159}
   ErrorDetail: {fileID: 375282201}
   VerifyPeer: 1
+  EnableConnectionMigration: 0
+  EnableEarlyData: 0
   Port: 443
   HostName: cloudflare-quic.com
   UriPath: 
   SaveFilePath: 
   QlogPath: 
+  WorkPath: 
+  MaxMultipleDownloadNum: 128
   manager: {fileID: 1818178146}
 --- !u!4 &662852807
 Transform:

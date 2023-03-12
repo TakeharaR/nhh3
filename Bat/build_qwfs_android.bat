@@ -43,7 +43,15 @@ call %NINJA_PATH%
 popd
 
 :: setup quiche
-xcopy /Y quiche_android_Cargo.toml %QUICHE_PATH%\quiche\Cargo.toml
+:: clean quiche local change
+pushd %QUICHE_PATH%
+call git checkout .
+popd
+
+:: patch quiche
+xcopy /Y .\patch\quiche_android_Cargo.toml %QUICHE_PATH%\quiche\Cargo.toml
+xcopy /Y /e .\patch\quiche %QUICHE_PATH%\quiche
+
 pushd %QUICHE_PATH%
 if "%BUIDLD_CONFIGURATION%"=="release" (
   set BUIDLD_CONFIGURATION_QUICHE=--release

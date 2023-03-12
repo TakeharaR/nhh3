@@ -185,6 +185,21 @@ namespace qwfs
         return QwfsResult::Ok;
     }
 
+    QwfsResult Reconnect(QwfsId hostId)
+    {
+        if (nullptr == _connectionManager)
+        {
+            return QwfsResult::ErrorInvalidArg;
+        }
+
+        auto connection = _connectionManager->GetConnection(hostId);
+        if (nullptr == connection)
+        {
+            return QwfsResult::ErrorInvalidArg;
+        }
+        return connection->Reconnect();
+    }
+
     const char* GetErrorDetail(QwfsId hostId)
     {
         if (nullptr == _connectionManager)

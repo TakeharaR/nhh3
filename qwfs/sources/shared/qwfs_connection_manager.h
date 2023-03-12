@@ -11,6 +11,7 @@ namespace qwfs
     {
     public:
         ConnectionManager();
+        ~ConnectionManager();
         Connection* Create(const char* hostName, const char* port, const QwfsCallbacks& callbacks, DebugOutputCallback debugOutput);
         QwfsResult Destroy(QwfsId id);
         Connection* GetConnection(QwfsId id);

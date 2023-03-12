@@ -8,7 +8,6 @@ public class Nhh3SampleSingle : Nhh3SampleCore
 {
     public void OnStartClick()
     {
-        CreateHttp3();
         var list = new List<Nhh3.RequestParamaters>
         {
             new Nhh3.RequestParamaters
@@ -32,6 +31,7 @@ public class Nhh3SampleSingle : Nhh3SampleCore
 
     private void Update()
     {
+        CheckNetworkReachability();
         var resList = Http3Update();
         foreach (var res in resList)
         {

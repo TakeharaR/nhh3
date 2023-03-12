@@ -97,6 +97,7 @@ public class Nhh3
     {
         NewReno,
         Cubic,
+        Bbr,
     };
     #endregion
 
@@ -112,7 +113,7 @@ public class Nhh3
     ///     see : QuicOptions.InitialMaxDataSize
     ///     この値を利用するかは実際に利用するサーバ、経路やプロジェクトの都合に合わせて決定してください.
     /// </summary>
-    public const ulong DefaultInitialMaxDataSize = 1024 * 1024;    // とりあえず 1MB
+    public const ulong DefaultInitialMaxDataSize = 100 * 1024 * 1024;    // とりあえず 1MB
 
     /// <summary>
     ///     see : QuicOptions.InitialMaxStreamsBidi, QuicOptions.InitialMaxStreamsUni
@@ -140,19 +141,21 @@ public class Nhh3
     {
         /// <summary>
         ///     HTTP/3 パラメータ "SETTINGS_MAX_HEADER_LIST_SIZE" (ヘッダリストに登録できるヘッダの最大数) の設定.
-        ///     仕様的には 0 設定で無制限ですが、現状 0 を設定するとヘッダが返ってこなくなるので適切な値を設定してください.
+        ///     1024 だと足りなくなることがままあるので少し多めの設定にしています.
         /// </summary>
-        public ulong MaxHeaderListSize { get; set; } = 1024;
+        public ulong MaxHeaderListSize { get; set; } = 100 * 1024;
 
         /// <summary>
         ///     HTTP/3 パラメータ "SETTINGS_QPACK_MAX_TABLE_CAPACITY" (QPACK の動的テーブルの最大値) の設定.
+        ///     quiche が DYNAMIC テーブルには未対応の為に 0 を指定してください.
         /// </summary>
-        public ulong QpackMaxTableCapacity { get; set; } = 1024;
+        public ulong QpackMaxTableCapacity { get; set; } = 0;
 
         /// <summary>
         ///     HTTP/3 パラメータ "SETTINGS_QPACK_BLOCKED_STREAMS" (ブロックされる可能性のあるストリーム数) の設定.
+        ///     1024 だと足りなくなることがままあるので少し多めの設定にしています.
         /// </summary>
-        public ulong QpackBlockedStreams { get; set; } = 512;
+        public ulong QpackBlockedStreams { get; set; } = 100 * 1024;
 
         /// <summary>
         /// CONNECT プロトコルを使用するかどうか.
@@ -173,18 +176,19 @@ public class Nhh3
         ///     コネクションマイグレーションに対応していないサーバと通信する場合は true に設定してください.
         /// </summary>
         [MarshalAs(UnmanagedType.I1)]
-        public bool DisableActiveMigration = false;
+        public bool DisableActiveMigration = true;
 
         /// <summary>
         ///     0-RTT を受け入れるかどうかの設定.
+        ///     この設定を true にした上で ConnectionOptions.WorkPath にセッション情報を保存するパスを指定してください.
         /// </summary>
         [MarshalAs(UnmanagedType.I1)]
-        public bool EnableEarlyData = true;
+        public bool EnableEarlyData = false;
 
         /// <summary>
         ///     輻輳制御アルゴリズムの設定.
         /// </summary>
-        CcType Cc { get; set; } = CcType.Cubic;
+        CcType Cc { get; set; } = CcType.Bbr;
 
         /// <summary>
         ///     トランスポートパラメータ "max_udp_payload_size" (UDP パケット最大サイズ) の設定.
@@ -230,6 +234,22 @@ public class Nhh3
         ///     トランスポートパラメータ "initial_max_streams_uni" (作成可能な単方向ストリームの最大値) の設定.
         /// </summary>
         public ulong InitialMaxStreamsUni { get; set; } = DefaultMaxStreamSize;
+
+        /// <summary>
+        ///     コネクションに用いる最大ウィンドウサイズ.
+        /// </summary>
+        public ulong MaxConnectionWindowSize { get; set; } = 24U * 1024U * 1024U;   // from quiche /src/args.rs
+
+        /// <summary>
+        ///     ストリームに用いる最大ウィンドウサイズ.
+        /// </summary>
+        public ulong MaxStreamWindowSize { get; set; } = 16U * 1024U * 1024U;    // from quiche /src/args.rs
+
+        /// <summary>
+        ///     アクティブなコネクション ID の上限値.
+        ///     Connection Migration 等に対応する際は多めに入れておく.
+        /// </summary>
+        public ulong ActiveConnectionIdLimit { get; set; } = 16;
     }
 
     [StructLayout(LayoutKind.Sequential)]
@@ -266,11 +286,19 @@ public class Nhh3
         public string QlogPath = string.Empty;
 
         /// <summary>
+        ///     0-RTT 用のセッションファイルなどの一時ファイルを配置するパス.
+        ///     指定したパス内にコネクション毎に 0-RTT のセッションファイルを配置します.
+        ///     ※将来的にはダウンロードしたデータの一時ファイルも生成予定.
+        /// </summary>
+        [MarshalAs(UnmanagedType.LPStr)]
+        public string WorkPath = string.Empty;
+
+        /// <summary>
         ///     同時に送信可能なリクエストの最大値です.
         ///     実際のリクエスト最大値は、この値とサーバから送信されてくる initial_max_streams_bidi 及び MAX_STREAMS の値から決定されます.
         ///     最大限に並列ダウンロードの効率を上げたい場合はサーバサイドの設定と合わせてこの値を調整してください.
         /// </summary>
-        public ulong MaxConcurrentStreams = 128;
+        public ulong MaxConcurrentStreams = 64;
 
         public Http3Options H3 { get; set; } = new Nhh3.Http3Options();
 
@@ -487,6 +515,14 @@ public class Nhh3
     public void Abort()
     {
         Nhh3Impl.Abort();
+    }
+
+    /// <summary>
+    ///     
+    /// </summary>
+    public void Reconnect()
+    {
+        Nhh3Impl.Reconnect();
     }
 
     /// <summary>
