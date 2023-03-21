@@ -187,12 +187,18 @@ namespace qwfs
         // HTTP ボディの受信を積み上げる
 
         // quiche からの受信したバッファを受け取る。一度で受け取れないことがある(上層の quiche_h3_conn_poll でまたここにくる)
+        memset(_recvTmpBuf, 0, _recvTmpBufSize);
         auto recvSize = quiche_h3_recv_body(_quicheH3Connection, _quicheQuicConnection, _streamId, _recvTmpBuf, _recvTmpBufSize);
         if (0 > recvSize)
         {
             std::stringstream ss;
             ss << "[qwfs error][" << _hostName << "][STREAM:" << _streamId << "]Failed to quiche_h3_recv_body(quiche_error is " << recvSize << ")." << std::endl;
             return SetStatus(ConvertQuicheH3ErrorToStatus(static_cast<quiche_h3_error>(recvSize), _status), ss.str().c_str());
+        }
+
+        if (0 > (_bodySize - (recvSize + _writeSize)))
+        {
+            recvSize = _bodySize - _writeSize;
         }
 
         // 書き込み処理

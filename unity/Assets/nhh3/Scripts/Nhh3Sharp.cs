@@ -518,7 +518,8 @@ public class Nhh3
     }
 
     /// <summary>
-    ///     
+    ///     強制的にネットワークの再接続を行います.
+    ///     再接続時には、 QuicOptions.DisableActiveMigration が false 且つ通信対象が対応している場合のみ Connection Migration が発動します.
     /// </summary>
     public void Reconnect()
     {

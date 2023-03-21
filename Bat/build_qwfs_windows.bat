@@ -1,21 +1,11 @@
+@echo off
 setlocal
 pushd %~dp0
 
-set NASM_PASS=%1
-set VS_MS_BUILD_CMD_PATH=%2
-set BUIDLD_CONFIGURATION=%3
+set BUIDLD_CONFIGURATION=%1
 set QUICHE_PATH=..\External\quiche
 set BOLINGSSL_PATH=%QUICHE_PATH%\quiche\deps\boringssl
 set QWFS_PATH=..\qwfs
-
-set path=%NASM_PASS%;%path%
-
-:: call VsMSBuildCmd.bat
-call %VS_MS_BUILD_CMD_PATH%\VsMSBuildCmd.bat
-if not %ERRORLEVEL%==0 (
-  echo [ERROR]call VsMSBuildCmd.bat failed
-  goto BUILD_ERROR
-)
 
 :: clean BoringSSL directory
 pushd %BOLINGSSL_PATH%
@@ -37,13 +27,13 @@ xcopy /Y /e .\patch\quiche %QUICHE_PATH%\quiche
 
 pushd %QUICHE_PATH%
 if "%BUIDLD_CONFIGURATION%"=="release" (
-  set BUIDLD_CONFIGURATION=--release
+  set BUIDLD_CONFIGURATION_QUICHE=--release
 ) else (
-  set BUIDLD_CONFIGURATION=
+  set BUIDLD_CONFIGURATION_QUICHE=
 )
 
 :: clean quiche directory
-call cargo clean %BUIDLD_CONFIGURATION%
+call cargo clean %BUIDLD_CONFIGURATION_QUICHE%
 if not %ERRORLEVEL%==0 (
   echo [ERROR]clean quiche failed
   popd
@@ -51,7 +41,7 @@ if not %ERRORLEVEL%==0 (
 )
 
 :: build quiche
-call cargo build --features ffi %BUIDLD_CONFIGURATION%
+call cargo build --features ffi %BUIDLD_CONFIGURATION_QUICHE%
 if not %ERRORLEVEL%==0 (
   echo [ERROR]build quiche failed
   popd
@@ -61,11 +51,11 @@ popd
 
 :: build qwfs
 if "%BUIDLD_CONFIGURATION%"=="release" (
-  set BUIDLD_CONFIGURATION=Release
+  set BUIDLD_CONFIGURATION_QWFS=Release
 ) else (
-  set BUIDLD_CONFIGURATION=Debug
+  set BUIDLD_CONFIGURATION_QWFS=Debug
 )
-call msbuild.exe /t:rebuild /p:Configuration=%BUIDLD_CONFIGURATION%;Platform="x64" %QWFS_PATH%\qwfs.sln
+call msbuild.exe /t:rebuild /p:Configuration=%BUIDLD_CONFIGURATION_QWFS%;Platform="x64" %QWFS_PATH%\qwfs.sln
 IF %ERRORLEVEL% == 1 (
   echo [ERROR]build qwfs failed
   goto BUILD_ERROR

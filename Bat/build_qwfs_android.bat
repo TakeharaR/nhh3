@@ -1,22 +1,11 @@
 setlocal
 pushd %~dp0
 
-set NASM_PASS=%1
-set VS_MS_BUILD_CMD_PATH=%2
-set NINJA_PATH=%3
-set BUIDLD_CONFIGURATION=%4
+set NINJA_PATH=%1
+set BUIDLD_CONFIGURATION=%2
 set QUICHE_PATH=..\External\quiche
 set BOLINGSSL_PATH=%QUICHE_PATH%\quiche\deps\boringssl
 set QWFS_PATH=..\qwfs
-
-set path=%NASM_PASS%;%path%
-
-:: call VsMSBuildCmd.bat
-call %VS_MS_BUILD_CMD_PATH%\VsMSBuildCmd.bat
-if not %ERRORLEVEL%==0 (
-  echo [ERROR]call VsMSBuildCmd.bat failed
-  goto BUILD_ERROR
-)
 
 :: clean BoringSSL directory
 pushd %BOLINGSSL_PATH%

@@ -10,12 +10,9 @@ nhh3 は Unity で HTTP/3 通信を行う事を目的とした Unity アセットです。<br>
 
 ## 注意事項
 
-nhh3 は Unity で HTTP/3 の通信を行う実験的な実装です。<br>
-製品への組み込みは推奨しません。
-現在の最新バージョンは 0.3.0 です。
-0.3.0 は実験的実装であり、インターフェースや仕様も仮のものです。
-今後、破壊的な変更を伴う大幅な修正が加わる事があります。
-利用時にはご注意ください。
+nhh3 は Unity で HTTP/3 通信を行う実験的な実装であり、製品への組み込みは推奨しません。<br>
+更に最新バージョンの 0.3 系のインターフェースや仕様も仮のものです。<br>
+今後、破壊的な変更を伴う大幅な修正が加わる事があります。利用時にはご注意ください。<br>
 
 
 ## Android で動作させる場合の補足
@@ -31,14 +28,7 @@ nhh3 は Unity で HTTP/3 の通信を行う実験的な実装です。<br>
 - qlog
     - Windows/Android にて動作確認済み
 - Connection Migration
-    - ローカルにたてた aioquic 0.9.20 にて Windows/Android の動作確認済みです
-    - cloudflare-quic.com や www.facebook.com 等 Web 上の HTTP/3 に対応したサイトでは以下の問題があります (調査中)
-        - Connection Migration に失敗する
-        - サーバの対応については現状 quiche の ``available_dcids`` で判定を行っていますが、これだけでは条件が不足しているようで、 Connection Migration が発動した上でサーバとの疎通がうまくいかないことがあります
-- 0-RTT
-    - ローカルにたてた aioquic 0.9.20 にて Windows/Android の動作確認済みです
-    - cloudflare-quic.com や www.facebook.com 等 Web 上の HTTP/3 に対応したサイトでは以下の問題があります (調査中)
-        - 0-RTT を伴うハンドシェイクに成功した後、一定サイズ以上の HTTP ボディを受信するとサーバからの応答が無くなる
+    - ``PATH_CHALLENGE`` へのレスポンスが返ってこず、 Connection Migration に失敗することがあります
 - QPACK
     - Windows/Android にて動作確認済み
     - Dyanamic Tabel には非対応です (quiche の制限事項)
@@ -66,8 +56,8 @@ nhh3 は Unity で HTTP/3 の通信を行う実験的な実装です。<br>
     - 簡単な確認の流れ : サンプル再生 → ダウンロードボタンを押す → 完了まで待つ → ``nhh3.Recconect`` or Wi-FI とキャリア通信の切り替え → ダウンロードボタンを押す
 - 0-RTT
     - ``ConnectionOptions.WorkPath`` を設定した上でコネクション毎に ``QuicOptions.EnableEarlyData`` で制御が可能です
-        - ``ConnectionOptions.WorkPath`` に指定したパスに Connection Migration 用のセッション情報を保存したファイルが保存されます
-    - 上記を設定した上で、サーバがに対応している場合にのみ 0-RTT による通信が行われます
+        - ``ConnectionOptions.WorkPath`` に指定したパスに 0-RTT 用のセッション情報を保存したファイルが保存されます
+    - 上記を設定した上で、サーバが対応している場合にのみ 0-RTT による通信が行われます
 - 詳細なログが必要な場合
     - ``ConnectionOptions.EnableQuicheLog`` を有効にすると quiche のログが ``nhh3.SetDebugLogCallback`` に設定したコールバックに出力されます
     - 
@@ -77,7 +67,6 @@ nhh3 は Unity で HTTP/3 の通信を行う実験的な実装です。<br>
 - 修正予定の問題
     - 301 等でコンテンツが空の際に正しく処理が行われません
     - プログレスの数字が合わなくなることがあります
-    - Android 版はまだ動作が不安定です
 - 修正が未定の問題
     - ファイル名や qlog 保存のパス等に日本語のファイルパスを指定するとクラッシュします
     - ソースコード内で todo とコメントがある個所はまったりと修正予定です
@@ -100,7 +89,7 @@ nhh3 は Unity で HTTP/3 の通信を行う実験的な実装です。<br>
     - デフォルトは 64 並列でダウンロードを行います
 
 ゲームオブジェクト Http3SharpHost にて通信先の URL やポート等設定可能ですので、試したい相手先によって変更を行ってください。<br>
-デフォルト値には cloudflare さんの HTTP/3 対応ページである cloudflare-quic.com を利用させて頂いています。
+デフォルト値には cloudflare さんの HTTP/3 対応ページを利用させて頂いています。
 
 
 ### サンプルシーンの注意事項
@@ -124,6 +113,9 @@ nhh3 の利用に特化した仕様で実装されているので単体での使用は非推奨です。
 
 ## ビルド方法
 
+Windows 環境のみでビルド可能な bat を用意してあります。<br>
+(quiche, boringssl も一緒にビルドします)<br>
+以下の手順で実行してください。
 
 ### 準備
 
@@ -139,29 +131,22 @@ nhh3 の利用に特化した仕様で実装されているので単体での使用は非推奨です。
 4. (Android 限定) ninja をダウンロードして展開する
     - パスを通す必要はありません(ビルド時に明示的に指定)
     - 動作確認を行った ninja のバージョンは 1.11.1 です
+5. git をインストールしてパスを通す
 
 
-### ビルド用 bat について
-
-Windows 環境のみでビルド可能な bat を用意してあります。<br>
-(quiche, boringssl も一緒にビルドします)<br>
-以下の手順で実行してください。
+### ビルド用 bat の実行
 
 - Windows
     - ``Bat\build_qwfs_windows.bat`` に以下の引数を指定して実行
-        - 第一引数 : ``nasm.exe`` が配置してあるパス
-        - 第二引数 : VS 2022 の ``VsMSBuildCmd.bat`` が配置してあるパス
-        - 第三引数 : ビルドコンフィギュレーション。 ``release`` 指定時にはリリースビルドを、それ以外の際はデバッグビルドを行います
+        - 第一引数 : ビルドコンフィギュレーション。 ``release`` 指定時にはリリースビルドを、それ以外の際はデバッグビルドを行います
     - 例
-        - ``$ build_qwfs_windows.bat D:\develop_tool\nasm-2.16.01 "C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\Tools" release``
+        - ``$ build_qwfs_windows.bat release``
 - Android
     - ``Bat\build_qwfs_android.bat`` に以下の引数を指定して実行
-        - 第一引数 : ``nasm.exe`` が配置してあるパス
-        - 第二引数 : VS 2022 の ``VsMSBuildCmd.bat`` が配置してあるパス
-        - 第三引数 : ``ninja.exe`` が配置してあるパス
-        - 第四引数 : ビルドコンフィギュレーション。 ``release`` 指定時にはリリースビルドを、それ以外の際はデバッグビルドを行います
+        - 第一引数 : ``ninja.exe`` が配置してあるパス
+        - 第二引数 : ビルドコンフィギュレーション。 ``release`` 指定時にはリリースビルドを、それ以外の際はデバッグビルドを行います
     - 例
-        - ``$ build_qwfs_android.bat D:\develop_tool\nasm-2.16.01 "C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\Tools" G:\develop\ninja\ninja.exe release``
+        - ``$ build_qwfs_android.bat G:\develop\ninja\ninja.exe release``
     - 補足
         - ``cargo build`` のみだと boringssl のビルドが通らなかった為、 boringssl は cmake で個別にビルドを行っています
         - また、個別にビルドを行った boringssl を参照する為に ``quiche\Cargo.toml`` を改変してあります
@@ -176,7 +161,7 @@ quiche を手動でビルドする際や quiche のバージョンを上げる際はご注意ください。
 
 # 依存する OSS とバージョン情報
 
-- quiche : b413b2fd8c917a8d2dc498016666542667cd56bc
+- quiche : 2183ded2b4ffcbcdedcdf595dc7e48c85e9913f3
 - boringssl : quiche の submodule の バージョン に準ずる
 
 

@@ -739,8 +739,8 @@ MonoBehaviour:
   EnableConnectionMigration: 0
   EnableEarlyData: 0
   Port: 443
-  HostName: cloudflare-quic.com
-  UriPath: 
+  HostName: blog-cloudflare-com-assets.storage.googleapis.com
+  UriPath: /2019/07/http3-toggle-1.png
   SaveFilePath: 
   QlogPath: 
   WorkPath: 
@@ -748,7 +748,7 @@ MonoBehaviour:
   manager: {fileID: 1818178146}
   CompletedDownloadFileNum: {fileID: 714444170}
   DownloadProgressBar: {fileID: 8382759}
-  DownloadFileNum: 64
+  DownloadFileNum: 32
 --- !u!4 &662852807
 Transform:
   m_ObjectHideFlags: 0

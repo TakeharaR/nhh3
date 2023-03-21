@@ -70,6 +70,20 @@ namespace qwfs
     {
         if (nullptr != _quicheH3Connection)
         {
+#if 0
+            // peer のパラメータや PMTU 等の通信パラメータを確認したい場合用
+            quiche_stats stats;
+            quiche_path_stats path_stats;
+            quiche_conn_stats(_quicheConnection, &stats);
+            quiche_conn_path_stats(_quicheConnection, 0, &path_stats);
+#endif
+
+            // 0-RTT 用にセッション情報を保存しておく
+            if (_options._quicOprtions._enableEarlyData)
+            {
+                SaveSessionForZeroRtt();
+            }
+            ShutdownStream();
             quiche_conn_close(_quicheConnection, false, 0, nullptr, 0);
         }
 
@@ -354,7 +368,7 @@ namespace qwfs
 
         // 輻輳制御アルゴリズムの指定
         quiche_config_set_cc_algorithm(config, static_cast<quiche_cc_algorithm>(options._quicOprtions._ccType));
-
+        
         quiche_config_set_max_idle_timeout(config, options._quicOprtions._maxIdleTimeout);                                      // max_idle_timeout の設定(ミリ秒)。 0 を指定する事でタイムアウトが無制限になる
         quiche_config_set_max_send_udp_payload_size(config, options._quicOprtions._maxUdpPayloadSize);                          // max_udp_payload_size (送信時)の設定。 PMTU の実装を鑑みて設定を行うこと(「14. Packet Size」参照)
         quiche_config_set_initial_max_data(config, options._quicOprtions._initialMaxData);                                      // initial_max_data の設定(コネクションに対する上限サイズ)
@@ -369,11 +383,9 @@ namespace qwfs
         quiche_config_set_active_connection_id_limit(config, options._quicOprtions._activeConnectionIdLimit);                   // アクティブなコネクション ID の上限値
 
         // 以下は qwfs の用途では基本的にはサーバ側の設定なのでスルー
-        // quiche_config_enable_hystart
         // quiche_config_set_max_ack_delay
         // quiche_config_set_ack_delay_exponent
         // quiche_config_load_priv_key_from_pem_file
-        // quiche_config_set_cc_algorithm
         // quiche_config_enable_hystart
         // quiche_config_enable_pacing
         // quiche_config_grease
@@ -657,25 +669,6 @@ namespace qwfs
                 }
                 return result;
             }
-
-#if 0
-            // 
-            static uint8_t buf[65535];
-            uint8_t type;
-            uint32_t version;
-            uint8_t scid[QUICHE_MAX_CONN_ID_LEN];
-            size_t scid_len = sizeof(scid);
-            uint8_t dcid[QUICHE_MAX_CONN_ID_LEN];
-            size_t dcid_len = sizeof(dcid);
-            uint8_t odcid[QUICHE_MAX_CONN_ID_LEN];
-            size_t odcid_len = sizeof(odcid);
-            uint8_t token[MAX_TOKEN_LEN];
-            size_t token_len = sizeof(token);
-            auto rc = quiche_header_info(reinterpret_cast<const uint8_t*>(receiveBuffer), recvSize, LOCAL_CONN_ID_LEN, &version, &type, scid, &scid_len, dcid, &dcid_len, token, &token_len);
-            if (token_len != 0) {
-                int hoge = 0;
-            }
-#endif
         }
 
         return QwfsResult::Ok;
@@ -705,7 +698,6 @@ namespace qwfs
 
     void Connection::CheckConnectionTimeout()
     {
-        // todo : きちんとした挙動の理解
         if (
             (nullptr == _quicheConnection) ||
             (_phase < Phase::Handshake) ||
@@ -799,14 +791,6 @@ namespace qwfs
             auto itr = _h3StreamsErrorStock.begin();
             _h3StreamsStock.push_back(std::move(*itr));
             _h3StreamsErrorStock.pop_front();
-        }
-
-        // 通信中のものがある場合も戻す (Recconect 呼び出し時にありえる)
-        while (!_h3Streams.empty())
-        {
-            auto itr = _h3Streams.begin();
-            _h3StreamsStock.push_back(std::move(*itr));
-            _h3Streams.pop_front();
         }
     }
 
@@ -951,6 +935,14 @@ namespace qwfs
         }
         else
         {
+            // 通信中のものがある場合最初からやり直しになるので内部リストを戻しておく
+            while (!_h3Streams.empty())
+            {
+                auto itr = _h3Streams.begin();
+                _h3StreamsMap.erase(itr->get()->GetStreamId());
+                _h3StreamsStock.push_back(std::move(*itr));
+                _h3Streams.pop_front();
+            }
             SetPhase(Phase::CreateSocket);
             return ConvertStatusToResult(_status);
         }
@@ -993,16 +985,6 @@ namespace qwfs
             connection->_isLoadedSessionForZeroRtt = connection->LoadSessionForZeroRtt();
         }
 
-        // Connection Migration が有効な場合には先に使用する scid を発行しておく(サーバへの送信が入る為)
-        if (!_options._quicOprtions._disableActiveMigration)
-        {
-            if (!quiche_new_source_cid(_quicheConnection, CreateToken().data(), TokenLength, CreateToken().data(), true))
-            {
-                connection->SetPhase(Phase::Wait);
-                return connection->SetStatus(QwfsStatus::CriticalErrorQuiche, "Failed to create new scid.");
-            }
-        }
-
         connection->SetPhase(Phase::Handshake);
         return QwfsResult::Ok;
     }
@@ -1041,9 +1023,6 @@ namespace qwfs
                 connection->DebugOutput(ss.str().c_str());
             }
 
-            // todo : 各種トランスポートパラメータを取得し保存しておく
-            // quiche_conn_stats(const quiche_conn * conn, quiche_stats * out);
-
             // HTTP/3 コネクションの作成(このタイミングではまだ通信しない)
             // 0-RTT 時には既に生成済みなのでスルーする
             if (nullptr == connection->_quicheH3Connection)
@@ -1055,8 +1034,6 @@ namespace qwfs
                     return connection->SetStatus(QwfsStatus::CriticalErrorQuiche, "Failed to quiche_h3_conn_new_with_transport");
                 }
             }
-            // Connection Migration に対応していない Recconet をした場合通信中の HTTP/3 が居る場合がある
-            connection->RetryStream();
 
             connection->SetPhase(Phase::Wait);
         }
@@ -1099,7 +1076,6 @@ namespace qwfs
             if (!_settingsReceived) {
                 auto rc = quiche_h3_for_each_setting(connection->_quicheH3Connection, ForEachSettingCallback, NULL);
                 if (rc == 0) {
-                    SaveSessionForZeroRtt();
                     connection->SettingsReceived();
                 }
             }
@@ -1213,6 +1189,12 @@ namespace qwfs
             {
                 return QwfsResult::Ok;
             }
+        }
+
+        if (!quiche_new_source_cid(_quicheConnection, CreateToken().data(), TokenLength, CreateToken().data(), false))
+        {
+            connection->SetPhase(Phase::Wait);
+            return connection->SetStatus(QwfsStatus::CriticalErrorQuiche, "Failed to create new scid.");
         }
 
         if (!quiche_probe_path(_quicheConnection, (struct sockaddr*)&_localAddInfo, _localAddrLen, _peerAddInfo->ai_addr, _peerAddInfo->ai_addrlen))

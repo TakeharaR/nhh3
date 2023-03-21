@@ -4,8 +4,7 @@ using UnityEngine;
 using UnityEngine.UI;
 
 /// <summary>
-///     aioquic の GET/NNNN 機能を用いて多重ダウンロードのテストを行うサンプルです.
-///     ダウンロードするデータのサイズは 1K ～ 1M の間のランダム値です.
+///     多重ダウンロードのテストを行うサンプルです.
 /// </summary>
 public class Nhh3SampleMulti : Nhh3SampleCore
 {
@@ -19,7 +18,7 @@ public class Nhh3SampleMulti : Nhh3SampleCore
     ///     ダウンロードを行うファイル数.
     /// </summary>
     [SerializeField]
-    private ulong DownloadFileNum = 128;
+    private ulong DownloadFileNum = 32;
 
     private ulong _completedDownloadFileNum = 0;
 
@@ -30,14 +29,18 @@ public class Nhh3SampleMulti : Nhh3SampleCore
         {
             // 保存パス
 #if UNITY_EDITOR_WIN || UNITY_STANDALONE_WIN
-            var saveFilePath = $"{WorkPath}\\{num}";
+            var saveFilePath = "";
+            if (!string.IsNullOrWhiteSpace(WorkPath))
+            {
+                saveFilePath = $"{WorkPath}\\{num}";
+            }
 #else
             // Android
             var saveFilePath = $"{Application.temporaryCachePath}\\{num}";
 #endif
             list.Add(new Nhh3.RequestParamaters
             {
-                //SaveFilePath = saveFilePath,
+                SaveFilePath = saveFilePath,
                 Path = UriPath,
             });
         };
